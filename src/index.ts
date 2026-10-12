@@ -10,7 +10,7 @@ export type {
   RequestOptions,
   LoginOptions,
   DeviceListResult,
-  DriveControlPayload,
+  DriveSetpointOptions,
 } from "./types.js";
 
 export * from "./schemas.js";

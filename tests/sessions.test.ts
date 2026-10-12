@@ -3,7 +3,7 @@ import { jsonResponse, createClient } from "./helpers.js";
 
 afterEach(() => vi.restoreAllMocks());
 
-describe("sessions and Drive", () => {
+describe("sessions", () => {
   it("requests session details and chart options with typed raw results", async () => {
     const fetcher = vi
       .fn<typeof fetch>()
@@ -36,34 +36,6 @@ describe("sessions and Drive", () => {
       "https://fireboard.io/api/v1/sessions/42/chart.json?drive=1",
       "https://fireboard.io/api/v1/sessions/42/chart.json",
     ]);
-  });
-
-  it("reads the single-object Drive log and sends the control envelope", async () => {
-    const log = {
-      tiedchannel: 1,
-      setpoint: 110,
-      driveper: 0.5,
-      modetype: "Auto",
-      degreetype: 1,
-      created: "2026-10-12T12:00:00Z",
-    };
-    const fetcher = vi
-      .fn<typeof fetch>()
-      .mockResolvedValueOnce(jsonResponse(log))
-      .mockResolvedValueOnce(new Response(null, { status: 204 }));
-    const api = createClient(fetcher);
-
-    expect(await api.getDriveLog("abc-123")).toEqual(log);
-
-    await api.controlDrive("abc-123", { t: "fan", p: "0.5" });
-
-    expect(fetcher.mock.calls[1]?.[1]).toMatchObject({
-      method: "POST",
-      body: JSON.stringify({
-        topic: "device",
-        payload: { t: "fan", p: "0.5", request_type: "control" },
-      }),
-    });
   });
 
   it("rejects invalid resource identifiers before making requests", () => {

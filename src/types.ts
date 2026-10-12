@@ -22,9 +22,6 @@ export interface DeviceListResult {
   cacheAgeSeconds: number;
 }
 
-export interface DriveControlPayload {
-  t?: "fan";
-  p?: string;
-  setpoint?: string;
-  cc?: string;
-}
+export type DriveSetpointOptions =
+  | { setpoint: number; channel?: number }
+  | { setpoint?: number; channel: number };

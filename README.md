@@ -37,9 +37,10 @@ API reference: [Fireboard Cloud API](https://docs.fireboard.io/app/app-api/).
 
 Create one `FireboardClient` per account/token and reuse it. `login` is a standalone function; the other methods are called on the client.
 
+### Read methods
+
 | Method                                      | What it does                                                                    | Returns                 | API calls                  |
 | ------------------------------------------- | ------------------------------------------------------------------------------- | ----------------------- | -------------------------- |
-| `login(credentials, options?)`              | Exchanges a username/email and password for a Fireboard token                   | `string`                | 1 authentication request   |
 | `getDevices()`                              | Lists the account’s devices with channels, temperatures, and available metadata | `DeviceListResult`      | 0 when cached; 1 on a miss |
 | `getDevice(deviceUuid)`                     | Retrieves detailed information for one device                                   | `RawDevice`             | 1, uncached                |
 | `getDeviceTemperatures(deviceUuid)`         | Retrieves readings less than one minute old                                     | `RawDeviceTemperatures` | 1, uncached                |
@@ -47,7 +48,20 @@ Create one `FireboardClient` per account/token and reuse it. `login` is a standa
 | `getSessions()`                             | Lists current and historical account sessions                                   | `RawSessionSummary[]`   | 1, uncached                |
 | `getSessionDetail(sessionId)`               | Retrieves a session’s metadata, devices, and available notes                    | `RawSessionDetail`      | 1, uncached                |
 | `getSessionChart(sessionId, includeDrive?)` | Retrieves temperature time-series, optionally including Drive data              | `RawChartChannel[]`     | 1, uncached                |
-| `controlDrive(deviceUuid, payload)`         | Sends a raw Drive-control command to a device                                   | `void`                  | 1 write request            |
+
+### Write methods
+
+| Method                                  | What it changes                                         | API calls                      |
+| --------------------------------------- | ------------------------------------------------------- | ------------------------------ |
+| `setDriveSetpoint(deviceUuid, options)` | Auto-mode temperature target and/or PID control channel | 1 for either field; 2 for both |
+| `setDriveSpeed(deviceUuid, percent)`    | Manual fan speed, from 0 to 100 percent                 | 1                              |
+| `setDriveOff(deviceUuid)`               | Clears the target and stops the fan                     | 1                              |
+
+Writes return `Promise<void>`, are not cached or automatically retried, and do not refresh the device-list cache. They control real hardware. These commands use an API extension observed in fireboard-mcp, which is not documented on the official API page.
+
+### Authentication
+
+`login(credentials, options?)` exchanges credentials for an API token using one authentication request.
 
 ### `login(credentials, options?)`
 
@@ -129,26 +143,37 @@ const temperaturesAndDrive = await fireboard.getSessionChart(42, true);
 
 `includeDrive: true` sends `drive=1`; it does not add another API request. The method is not cached.
 
-### `controlDrive(deviceUuid, payload)`
+### `setDriveSetpoint(deviceUuid, options)`
 
-Sends one command and resolves without response data. This writes to real hardware and is not cached or automatically retried. Writes do not refresh the device-list cache.
-
-The method uses Fireboard’s raw control fields:
-
-| Field      | Meaning                                                                                   |
-| ---------- | ----------------------------------------------------------------------------------------- |
-| `t`        | Use `"fan"` for fan commands                                                              |
-| `p`        | Fan-speed fraction as a string: `"0.5"` means 50%; `"0"` stops the fan                    |
-| `setpoint` | Target temperature as a string in the device’s configured unit; `"0"` clears the setpoint |
-| `cc`       | PID control-channel number as a string                                                    |
+Pass a finite numeric `setpoint`, a positive integer `channel`, or both. At least one is required, and all arguments are validated before any write is sent.
 
 ```typescript
-await fireboard.controlDrive("your-device-uuid", { t: "fan", p: "0.5" });
-await fireboard.controlDrive("your-device-uuid", { t: "fan", setpoint: "110" });
-await fireboard.controlDrive("your-device-uuid", { cc: "2" });
+await fireboard.setDriveSetpoint("your-device-uuid", { setpoint: 110 });
+await fireboard.setDriveSetpoint("your-device-uuid", { channel: 2 });
+await fireboard.setDriveSetpoint("your-device-uuid", { setpoint: 110, channel: 2 });
 ```
 
-The client supplies the `topic: "device"` envelope and `request_type: "control"`. The control endpoint and payload are **not documented on the official API page**; they are based on the existing fireboard-mcp implementation and may change independently.
+A setpoint switches Drive to automatic control. Its temperature must use the device’s configured unit; the client does not convert Celsius/Fahrenheit. A channel-only call changes the PID control probe without setting a new target.
+
+Supplying both fields sends two separate writes in parallel. If one fails, the other may already have been applied. The method does not retry either write.
+
+### `setDriveSpeed(deviceUuid, percent)`
+
+Pass a finite percentage between `0` and `100`. This puts Drive in manual mode and overrides the active automatic target. The client converts the percentage into Fireboard’s wire-format fraction.
+
+```typescript
+await fireboard.setDriveSpeed("your-device-uuid", 50);
+```
+
+A value of `0` stops the fan. Use `setDriveOff` when you want to explicitly clear the setpoint as well.
+
+### `setDriveOff(deviceUuid)`
+
+Clears the setpoint by setting it to zero and stops the Drive fan.
+
+```typescript
+await fireboard.setDriveOff("your-device-uuid");
+```
 
 ### Response validation
 
@@ -213,7 +238,7 @@ All public exports are imported from `"fireboard-api-client"`; no internal file 
 | `RequestOptions`         | Shared transport options: `fetch`, `timeoutMs`, and `userAgent`        |
 | `LoginOptions`           | Login transport options and optional `loginUrl`                        |
 | `DeviceListResult`       | Device-list data and cache metadata                                    |
-| `DriveControlPayload`    | The raw Drive-control fields accepted by `controlDrive`                |
+| `DriveSetpointOptions`   | A setpoint, a control channel, or both for `setDriveSetpoint`          |
 | `FireboardErrorCode`     | The union of error codes listed above                                  |
 | `RawDevice`              | One parsed device and its available metadata/channels                  |
 | `RawDeviceTemperatures`  | JSON returned by the temperature read, without an assumed field schema |

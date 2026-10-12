@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import { DriveControls } from "./drive.js";
 import { decode, headers, request, DEFAULT_TIMEOUT_MS } from "./request.js";
 import {
   chartResponseSchema,
@@ -9,7 +10,7 @@ import {
   sessionDetailSchema,
   sessionsResponseSchema,
 } from "./schemas.js";
-import type { DeviceListResult, DriveControlPayload, FireboardClientOptions } from "./types.js";
+import type { DeviceListResult, DriveSetpointOptions, FireboardClientOptions } from "./types.js";
 import {
   encodeDeviceId,
   validateEndpoint,
@@ -24,6 +25,7 @@ export class FireboardClient {
   readonly #options: FireboardClientOptions;
   private readonly baseUrl: string;
   private readonly cacheTtlMs: number;
+  private readonly drive: DriveControls;
   private cache: { data: DeviceListResult["data"]; fetchedAt: number } | undefined;
   private pendingDevices: Promise<DeviceListResult> | undefined;
 
@@ -40,6 +42,7 @@ export class FireboardClient {
     );
     this.baseUrl = validateEndpoint(options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/$/, "");
     this.#options = { ...options };
+    this.drive = new DriveControls(this.baseUrl, this.#options);
   }
 
   private async get<S extends z.ZodType>(path: string, schema: S): Promise<z.output<S>> {
@@ -118,19 +121,18 @@ export class FireboardClient {
     );
   }
 
-  /** Uses the undocumented control endpoint observed in fireboard-mcp. Writes to hardware. */
-  async controlDrive(uuid: string, payload: DriveControlPayload): Promise<void> {
-    await request(
-      `${this.baseUrl}/devices/${encodeDeviceId(uuid)}/mq.json`,
-      {
-        method: "POST",
-        headers: {
-          ...headers(this.#options, this.#options.token),
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ topic: "device", payload: { ...payload, request_type: "control" } }),
-      },
-      this.#options,
-    );
+  /** Sets an auto-mode target in the device's temperature unit and/or its control channel. */
+  setDriveSetpoint(uuid: string, options: DriveSetpointOptions): Promise<void> {
+    return this.drive.setSetpoint(uuid, options);
+  }
+
+  /** Sets a manual fan speed from 0 to 100 percent. */
+  setDriveSpeed(uuid: string, percent: number): Promise<void> {
+    return this.drive.setSpeed(uuid, percent);
+  }
+
+  /** Clears the setpoint and turns the Drive fan off. */
+  setDriveOff(uuid: string): Promise<void> {
+    return this.drive.off(uuid);
   }
 }
