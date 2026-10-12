@@ -1,6 +1,6 @@
 # Fireboard API Client
 
-An unofficial TypeScript client for the [Fireboard](https://fireboard.io) API. Read devices, temperatures, and cook sessions, or control a Drive fan with typed methods.
+An unofficial TypeScript client for the official [Fireboard](https://fireboard.io) temperature monitoring API. Read devices, temperatures, and cook sessions, or control a Drive fan with typed methods.
 
 Requires Node.js 22 or newer. ESM only.
 
