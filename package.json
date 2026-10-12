@@ -1,6 +1,6 @@
 {
   "name": "fireboard-api-client",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Unofficial TypeScript client for the Fireboard temperature monitoring API",
   "keywords": [
     "api-client",

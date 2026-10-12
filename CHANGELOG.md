@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.2.0](https://github.com/benhodgson87/fireboard-api-client/compare/v0.1.0...v0.2.0) (2026-10-12)
+
+
+### Features
+
+* add device-list caching ([#6](https://github.com/benhodgson87/fireboard-api-client/issues/6)) ([817a661](https://github.com/benhodgson87/fireboard-api-client/commit/817a661661833d5d9a2fb4c52b1503557c7a1a1f))
+
+
+### Bug Fixes
+
+* accept empty Drive logs when no recent data exists ([#9](https://github.com/benhodgson87/fireboard-api-client/issues/9)) ([92a2034](https://github.com/benhodgson87/fireboard-api-client/commit/92a2034548315cd696f481cb1d7403bb4b3cbfc4))
+* accept nullable device metadata from Fireboard ([#7](https://github.com/benhodgson87/fireboard-api-client/issues/7)) ([b4b816f](https://github.com/benhodgson87/fireboard-api-client/commit/b4b816f2d7c25436e3dc98cca67722558b03d645))
+
 ## 0.1.0 (2026-10-12)
 
 
