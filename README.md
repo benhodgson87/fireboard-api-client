@@ -2,6 +2,8 @@
 
 An unofficial TypeScript client for the [Fireboard](https://fireboard.io) temperature monitoring API. Read devices, temperatures, and cook sessions, or control a Drive fan with typed methods.
 
+Responses are transformed by default into simpler, typed models for devices, Drive status, sessions, and charts. Import from `fireboard-api-client/raw` to use the original Fireboard response fields.
+
 Requires Node.js 22 or newer. ESM only.
 
 ## Quick start
