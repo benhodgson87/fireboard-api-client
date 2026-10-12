@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.3.0](https://github.com/benhodgson87/fireboard-api-client/compare/v0.2.0...v0.3.0) (2026-10-12)
+
+
+### ⚠ BREAKING CHANGES
+
+* remove Raw prefixes from response types ([#13](https://github.com/benhodgson87/fireboard-api-client/issues/13))
+
+### Bug Fixes
+
+* allow publishing an existing release tag ([#11](https://github.com/benhodgson87/fireboard-api-client/issues/11)) ([9d7a023](https://github.com/benhodgson87/fireboard-api-client/commit/9d7a023aa148add74c5a178ed132d7002b921a56))
+
+
+### Code Refactoring
+
+* remove Raw prefixes from response types ([#13](https://github.com/benhodgson87/fireboard-api-client/issues/13)) ([d4c2c21](https://github.com/benhodgson87/fireboard-api-client/commit/d4c2c21b0f400a3666b5f87d1314c37e7e2507ed))
+
 ## [0.2.0](https://github.com/benhodgson87/fireboard-api-client/compare/v0.1.0...v0.2.0) (2026-10-12)
 
 
