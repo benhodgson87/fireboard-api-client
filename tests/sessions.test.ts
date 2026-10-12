@@ -4,7 +4,7 @@ import { jsonResponse, createClient } from "./helpers.js";
 afterEach(() => vi.restoreAllMocks());
 
 describe("sessions", () => {
-  it("requests session details and chart options with typed raw results", async () => {
+  it("requests session details and chart options with typed responses", async () => {
     const fetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(

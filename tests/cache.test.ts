@@ -18,7 +18,7 @@ describe("device-list cache", () => {
       .mockImplementation(async () => jsonResponse([]));
     const api = createClient(fetcher);
 
-    const raw = api.getDevices();
+    const devices = api.getDevices();
     const metadata = api.getDevicesWithCache();
 
     expect(fetcher).toHaveBeenCalledTimes(1);
@@ -26,7 +26,7 @@ describe("device-list cache", () => {
     clock.mockReturnValue(10_000);
     resolve(jsonResponse([device]));
 
-    expect(await raw).toMatchObject([device]);
+    expect(await devices).toMatchObject([device]);
     expect(await metadata).toMatchObject({ data: [device], fromCache: false, cacheAgeSeconds: 0 });
 
     clock.mockReturnValue(40_000);

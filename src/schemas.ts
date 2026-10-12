@@ -292,12 +292,12 @@ export const chartChannelSchema = z.looseObject({
 // ]
 export const chartResponseSchema = z.array(chartChannelSchema);
 
-export type RawDevice = z.infer<typeof deviceSchema>;
-export type RawAlert = z.infer<typeof alertSchema>;
-export type RawSessionSummary = z.infer<typeof sessionSummarySchema>;
-export type RawSessionDetail = z.infer<typeof sessionDetailSchema>;
-export type RawChartChannel = z.infer<typeof chartChannelSchema>;
-export type RawDriveLog = z.infer<typeof driveLogSchema>;
-export type RawDriveLogResponse = z.infer<typeof driveLogResponseSchema>;
+export type Device = z.infer<typeof deviceSchema>;
+export type Alert = z.infer<typeof alertSchema>;
+export type SessionSummary = z.infer<typeof sessionSummarySchema>;
+export type SessionDetail = z.infer<typeof sessionDetailSchema>;
+export type ChartChannel = z.infer<typeof chartChannelSchema>;
+export type DriveLog = z.infer<typeof driveLogSchema>;
+export type DriveLogResponse = z.infer<typeof driveLogResponseSchema>;
 
-export type RawDeviceTemperatures = z.infer<typeof deviceTemperaturesResponseSchema>;
+export type DeviceTemperatures = z.infer<typeof deviceTemperaturesResponseSchema>;

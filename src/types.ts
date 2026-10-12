@@ -1,4 +1,4 @@
-import type { RawDevice } from "./schemas.js";
+import type { Device } from "./schemas.js";
 
 export interface RequestOptions {
   fetch?: typeof globalThis.fetch;
@@ -21,7 +21,7 @@ export type DriveSetpointOptions =
   | { setpoint?: number; channel: number };
 
 export interface DeviceListResult {
-  data: RawDevice[];
+  data: Device[];
   fromCache: boolean;
   cacheAgeSeconds: number;
 }
