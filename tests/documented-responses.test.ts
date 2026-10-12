@@ -25,6 +25,31 @@ describe("documented response properties", () => {
     expect(devicesResponseSchema.parse([device])).toEqual([device]);
   });
 
+  it("preserves additional properties inside nested channel and temperature data", () => {
+    const device = {
+      id: 1,
+      uuid: "abc-123",
+      title: "Grill",
+      channels: [
+        {
+          id: 10,
+          channel: 1,
+          channel_label: "Pit",
+          enabled: true,
+          alerts: [],
+          additional_property: true,
+          last_templog: {
+            temp: 100,
+            created: "2026-10-12T10:00:00Z",
+            additional_property: true,
+          },
+        },
+      ],
+    };
+
+    expect(devicesResponseSchema.parse([device])).toEqual([device]);
+  });
+
   it("retains session metadata and accepts summaries without device_ids", () => {
     const session = {
       id: 42,

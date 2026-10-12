@@ -72,7 +72,7 @@ const deviceChannelSchema = z.looseObject({
   enabled: z.boolean(),
   alerts: z.array(alertSchema).default([]),
   last_templog: z
-    .object({
+    .looseObject({
       temp: z.number(),
       created: z.string(),
       degreetype: nullableDegreeTypeSchema,
@@ -202,7 +202,7 @@ const sessionDeviceSchema = z.looseObject({
   uuid: z.string(),
   title: z.string(),
   channels: z.array(
-    z.object({
+    z.looseObject({
       channel_label: z.string(),
       channel: z.number(),
     }),
