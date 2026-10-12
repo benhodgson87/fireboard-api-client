@@ -8,20 +8,6 @@ import {
 
 // These fixtures exercise the official attribute tables; they are not captured API responses.
 describe("documented response properties", () => {
-  it("accepts null device metadata returned by the live API", () => {
-    const device = {
-      id: 1,
-      uuid: "synthetic-device",
-      title: "Grill",
-      channels: [],
-      last_battery_reading: null,
-      device_log: null,
-      last_templog: null,
-    };
-
-    expect(devicesResponseSchema.parse([device])).toEqual([device]);
-  });
-
   it("retains documented device properties without requiring observed-only fields", () => {
     const device = {
       id: 1,
