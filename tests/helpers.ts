@@ -1,5 +1,5 @@
-import { FireboardClient } from "../src/index.js";
-import type { FireboardClientOptions } from "../src/index.js";
+import { FireboardClient } from "../src/raw.js";
+import type { FireboardClientOptions } from "../src/raw.js";
 
 export const device = {
   uuid: "abc-123",

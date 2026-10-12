@@ -1,6 +1,6 @@
 import { createRequire } from "node:module";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { FireboardClient, FireboardError, login } from "../src/index.js";
+import { FireboardClient, FireboardError, login } from "../src/raw.js";
 import { device, jsonResponse, createClient } from "./helpers.js";
 
 afterEach(() => vi.restoreAllMocks());

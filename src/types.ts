@@ -20,8 +20,8 @@ export type DriveSetpointOptions =
   | { setpoint: number; channel?: number }
   | { setpoint?: number; channel: number };
 
-export interface DeviceListResult {
-  data: RawDevice[];
+export interface DeviceListResult<T = RawDevice> {
+  data: T[];
   fromCache: boolean;
   cacheAgeSeconds: number;
 }

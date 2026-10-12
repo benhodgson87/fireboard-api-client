@@ -27,7 +27,17 @@ const sessions = await fireboard.getSessions();
 
 If you already have a token, pass it directly to `new FireboardClient({ token })`. Reuse one client per account. The library supplies Fireboard's required User-Agent header and does not store login credentials.
 
-API reference: [Fireboard Cloud API](https://docs.fireboard.io/app/app-api/).
+The main import returns cleaned responses documented below. Use `/raw` for validated Fireboard responses with their original field names:
+
+```typescript
+import { FireboardClient as RawFireboardClient } from "fireboard-api-client/raw";
+
+const rawFireboard = new RawFireboardClient({ token });
+const devices = await rawFireboard.getDevices();
+// devices[0].channels[0].channel_label rather than .label
+```
+
+Both clients accept the same options and method arguments. Their caches are separate per instance. The [Fireboard API reference](https://docs.fireboard.io/app/app-api/) documents the underlying endpoints.
 
 ## Methods
 
@@ -37,14 +47,14 @@ All methods below are called on `FireboardClient`, except the standalone `login`
 
 | Method                                      | What it does                                                                    | Returns                 |
 | ------------------------------------------- | ------------------------------------------------------------------------------- | ----------------------- |
-| `getDevices()`                              | Lists the account’s devices with channels, temperatures, and available metadata | `RawDevice[]`           |
+| `getDevices()`                              | Lists the account’s devices with channels, temperatures, and available metadata | `DeviceSummary[]`       |
 | `getDevicesWithCache()`                     | Lists devices with cache freshness metadata                                     | `DeviceListResult`      |
-| `getDevice(deviceUuid)`                     | Retrieves detailed information for one device                                   | `RawDevice`             |
+| `getDevice(deviceUuid)`                     | Retrieves detailed information for one device                                   | `DeviceSummary`         |
 | `getDeviceTemperatures(deviceUuid)`         | Retrieves readings less than one minute old                                     | `RawDeviceTemperatures` |
-| `getDriveLog(deviceUuid)`                   | Retrieves a Drive log less than one minute old                                  | `RawDriveLog`           |
-| `getSessions()`                             | Lists current and historical account sessions                                   | `RawSessionSummary[]`   |
-| `getSessionDetail(sessionId)`               | Retrieves a session’s metadata, devices, and available notes                    | `RawSessionDetail`      |
-| `getSessionChart(sessionId, includeDrive?)` | Retrieves temperature time-series, optionally including Drive data              | `RawChartChannel[]`     |
+| `getDriveLog(deviceUuid)`                   | Retrieves a Drive log less than one minute old                                  | `DriveStatus`           |
+| `getSessions()`                             | Lists current and historical account sessions                                   | `SessionSummary[]`      |
+| `getSessionDetail(sessionId)`               | Retrieves a session’s metadata, devices, and available notes                    | `SessionDetail`         |
+| `getSessionChart(sessionId, includeDrive?)` | Retrieves temperature time-series, optionally including Drive data              | `ChartChannel[]`        |
 
 ### Write methods
 
@@ -64,7 +74,7 @@ Options are `loginUrl`, `timeoutMs`, `fetch`, and `userAgent`. Store the returne
 
 ### `getDevices()`
 
-Returns an array of devices, cached for two minutes by default. Reuse their UUIDs in later method calls.
+Returns an array of [device summaries](#devicesummary), cached for two minutes by default. Reuse their UUIDs in later method calls.
 
 ```typescript
 const devices = await fireboard.getDevices();
@@ -72,11 +82,11 @@ const devices = await fireboard.getDevices();
 
 ### `getDevicesWithCache()`
 
-Returns `{ data, fromCache, cacheAgeSeconds }`, where `data` is `RawDevice[]`. Shares the same cache as `getDevices()`. Fresh responses have `fromCache: false` and age `0`; cached responses report their rounded age in seconds.
+Returns `{ data, fromCache, cacheAgeSeconds }`, where `data` is `DeviceSummary[]` (`RawDevice[]` from `/raw`). Shares the same cache as `getDevices()`. Fresh responses have `fromCache: false` and age `0`; cached responses report their rounded age in seconds.
 
 ### `getDevice(deviceUuid)`
 
-Pass the device’s UUID, not its numeric ID. Returns the device and its available channel metadata.
+Pass the device’s UUID, not its numeric ID. Returns a [device summary](#devicesummary) with its available channel metadata. The `/raw` client retains all validated device fields.
 
 ### `getDeviceTemperatures(deviceUuid)`
 
@@ -90,27 +100,28 @@ Fireboard does not document this response’s JSON shape. `RawDeviceTemperatures
 
 ### `getDriveLog(deviceUuid)`
 
-Returns a recent Drive log containing the observed `driveper`, `setpoint`, `modetype`, `tiedchannel`, `degreetype`, and `created` fields. Pass the device’s UUID.
+Returns a [Drive status](#drivestatus) with fan percentage, setpoint, mode, control channel, unit, and timestamp. Pass the device’s UUID.
 
 ```typescript
 const drive = await fireboard.getDriveLog("your-device-uuid");
+console.log(drive.drive_percent, drive.setpoint, drive.unit);
 ```
 
 Fireboard only returns log data less than one minute old. The client expects a single object; other shapes raise `INVALID_RESPONSE`. Fireboard does not document the empty/stale-log response shape.
 
 ### `getSessions()`
 
-Returns account session summaries. Ordering is not guaranteed; sort or filter results as needed.
+Returns [session summaries](#sessionsummary). Ordering is not guaranteed; sort or filter results as needed.
 
-Use each summary’s numeric `id` for session-detail and chart requests. `device_ids` is optional.
+Use each summary’s numeric `id` for session-detail and chart requests. Missing device identifiers become an empty `device_uuids` array.
 
 ### `getSessionDetail(sessionId)`
 
-Pass a non-negative integer session ID. Returns metadata, linked devices, and cook notes; omitted notes become `[]`.
+Pass a non-negative integer session ID. Returns [session details](#sessiondetail): metadata, timing, duration, linked devices, flattened channels, and cook notes. Omitted notes become `[]`.
 
 ### `getSessionChart(sessionId, includeDrive = false)`
 
-Returns an array of channel series. Each includes `x` timestamps, `y` temperature values or Drive percentages, `device`, `label`, and `degreetype` (`1` for Celsius, `2` for Fahrenheit). Observed `channel_id` values are optional and numeric identifiers are normalized to strings.
+Returns [chart channels](#chartchannel) with ISO timestamp/value pairs. Temperature and Drive values retain their source units.
 
 ```typescript
 const temperatures = await fireboard.getSessionChart(42);
@@ -153,34 +164,173 @@ await fireboard.setDriveOff("your-device-uuid");
 
 ### Response validation
 
-Responses retain Fireboard’s field names and unknown fields, including nested fields. Zod validates known fields. Channel, alert, note, and Drive-log models include observed fields that Fireboard’s public reference does not fully specify.
+Both clients validate Fireboard responses with Zod. The main client then selects and renames fields into the models below. The `/raw` client preserves original field names and unknown fields, including nested fields. Channel, alert, note, and Drive-log models include observed fields that Fireboard’s public reference does not fully specify.
 
-## Output transforms
+## Response shapes
 
-Read methods return validated Fireboard data. Use these helpers to select useful fields and produce simpler output:
+These types describe the main import. Optional fields are marked with `?` and omitted when unavailable. Temperature values and setpoints are never converted between Celsius and Fahrenheit. Unit codes `1` and `2` become `"C"` and `"F"`; other codes become strings.
+
+### DeviceSummary
+
+Returned by `getDevices()`, `getDevicesWithCache().data`, and `getDevice()`.
 
 ```typescript
-import { transformDeviceWithTemps, transformSessionDetail } from "fireboard-api-client";
-
-const readings = (await fireboard.getDevices()).map(transformDeviceWithTemps);
-const session = transformSessionDetail(await fireboard.getSessionDetail(42));
+{
+  uuid: string;
+  id: number;
+  title: string;
+  model_name?: string;
+  channel_count?: number;
+  battery?: number;
+  channels: DeviceChannel[];
+  last_drive?: DriveStatus;
+}
 ```
 
-| Helper                                  | Returns           | Cleanup                                                                                                |
-| --------------------------------------- | ----------------- | ------------------------------------------------------------------------------------------------------ |
-| `transformDeviceSummary(device)`        | `DeviceSummary`   | Device metadata, channel labels, alerts, battery, and last Drive status                                |
-| `transformDeviceWithTemps(device)`      | `DeviceWithTemps` | Probe readings with `temp`, `unit`, and `as_of`; omits channels without readings, units, or timestamps |
-| `transformDriveLog(log, channels?)`     | `DriveStatus`     | Fan percentage, setpoint, mode, unit, timestamp, and optional control-channel label                    |
-| `transformSessionSummary(session)`      | `SessionSummary`  | Start/end times, `in_progress`, and device UUIDs                                                       |
-| `transformSessionDetail(session)`       | `SessionDetail`   | Duration in minutes, devices, flattened channels, and notes                                            |
-| `transformChartChannels(chart)`         | `ChartChannel[]`  | Paired readings with ISO timestamps instead of separate `x`/`y` arrays                                 |
-| `transformSessionChart(session, chart)` | `SessionChart`    | Session metadata, transformed chart channels, and notes                                                |
+`battery` comes from Fireboard’s `last_battery_reading` without rescaling. `last_drive` is omitted when no Drive log is available. Its control-channel label is resolved from the device’s channels.
 
-Transforms leave their inputs unchanged and omit fields outside their output models. Degree codes `1` and `2` become `C` and `F`; other codes remain strings. Values are not converted between units. Chart readings use `temp` for both temperatures and Drive percentages, matching the source series. Mismatched chart timestamp/value arrays throw `TypeError`.
+Each `DeviceChannel` contains `id: number`, `channel: number`, `label: string`, and `alerts: Alert[]`. Channels remain present even without temperature readings. Device summaries omit current temperatures; use the `/raw` device data with `transformDeviceWithTemps` when you need probe readings.
 
-Completed session durations use the end time; active sessions use the current time. If a session summary omits `device_ids`, `device_uuids` is empty. Missing device channel counts remain omitted.
+Each `Alert` contains:
 
-All return types above are exported, along with `Alert`, `DeviceChannel`, `ChannelReading`, and `Note`.
+- `id: number`, `temp_min: number`, `temp_max: number`, and `enabled: boolean`.
+- `notify_app: boolean`, `notify_email: boolean`, and `notify_sms: boolean`.
+- `time_start: string`, `time_stop: string`, `minutes_buffer: number`, and `minutes_repeat: number`.
+
+### DriveStatus
+
+Returned by `getDriveLog()` and nested as `DeviceSummary.last_drive`.
+
+```typescript
+{
+  setpoint: number;
+  drive_percent: number;
+  mode: string;
+  tied_to_channel: number;
+  tied_to_channel_label?: string;
+  unit: string;
+  as_of: string;
+}
+```
+
+`drive_percent` preserves Fireboard’s `driveper` value. `mode` preserves the source mode, converting numeric codes to strings. `as_of` preserves the log’s `created` timestamp. A standalone `getDriveLog()` result has no channel label; nested device Drive status includes it when matched.
+
+### SessionSummary
+
+Returned by `getSessions()`.
+
+```typescript
+{
+  id: number;
+  title: string;
+  description: string;
+  start: string;
+  end: string | null;
+  in_progress: boolean;
+  device_uuids: string[];
+}
+```
+
+`start` and `end` preserve Fireboard’s timestamps. A null `end` means `in_progress: true`. Missing `device_ids` produces an empty `device_uuids` array. Ordering is not guaranteed.
+
+### SessionDetail
+
+Returned by `getSessionDetail()`.
+
+```typescript
+{
+  id: number;
+  title: string;
+  description: string;
+  start: string;
+  end: string | null;
+  in_progress: boolean;
+  duration_minutes: number;
+  devices: { uuid: string; title: string }[];
+  channels: { label: string; device_uuid: string }[];
+  notes: Note[];
+}
+```
+
+`duration_minutes` is rounded from the start/end timestamps. Active sessions use the current time. Channels are flattened across all linked devices.
+
+Each `Note` contains `time: string`, `text: string`, `channel: number | null`, and `device_uuid: string`. A null channel means the note is not tied to a specific probe. Note timestamps are preserved; missing notes become an empty array.
+
+### ChartChannel
+
+Returned by `getSessionChart()`.
+
+```typescript
+{
+  device_uuid: string;
+  label: string;
+  unit: string;
+  readings: {
+    t: string;
+    temp: number;
+  }
+  [];
+}
+```
+
+Fireboard’s Unix timestamps are converted to ISO UTC strings in `t`. `temp` holds the original temperature or Drive percentage for that series. Mismatched timestamp/value arrays throw `TypeError`.
+
+For example:
+
+```json
+{
+  "device_uuid": "abc-123",
+  "label": "Pit",
+  "unit": "C",
+  "readings": [{ "t": "2026-01-01T00:00:00.000Z", "temp": 110 }]
+}
+```
+
+### Device temperature responses
+
+`getDeviceTemperatures()` returns `RawDeviceTemperatures` from both imports. Fireboard does not define this endpoint’s JSON structure, so the library preserves its JSON rather than assuming a model. Narrow the result before accessing fields.
+
+### Raw responses
+
+The `/raw` client has the same methods with these return types:
+
+| Method                                      | Raw return type                                                      |
+| ------------------------------------------- | -------------------------------------------------------------------- |
+| `getDevices()`                              | `RawDevice[]`                                                        |
+| `getDevicesWithCache()`                     | `{ data: RawDevice[], fromCache: boolean, cacheAgeSeconds: number }` |
+| `getDevice(deviceUuid)`                     | `RawDevice`                                                          |
+| `getDeviceTemperatures(deviceUuid)`         | `RawDeviceTemperatures`                                              |
+| `getDriveLog(deviceUuid)`                   | `RawDriveLog`                                                        |
+| `getSessions()`                             | `RawSessionSummary[]`                                                |
+| `getSessionDetail(sessionId)`               | `RawSessionDetail`                                                   |
+| `getSessionChart(sessionId, includeDrive?)` | `RawChartChannel[]`                                                  |
+
+Raw means validated source data, not the HTTP response: missing alerts/notes become empty arrays, and numeric chart `channel_id` values become strings. Other fields retain their original names and unknown properties are preserved.
+
+## Additional transforms
+
+Both imports export the transform helpers and their output types for working with stored or raw data:
+
+| Helper                                  | Returns           | Purpose                                                      |
+| --------------------------------------- | ----------------- | ------------------------------------------------------------ |
+| `transformDeviceSummary(device)`        | `DeviceSummary`   | Device metadata, channels, alerts, battery, and Drive status |
+| `transformDeviceWithTemps(device)`      | `DeviceWithTemps` | Probe readings with temperature, unit, and timestamp         |
+| `transformDriveLog(log, channels?)`     | `DriveStatus`     | Cleaned Drive status and optional channel label              |
+| `transformSessionSummary(session)`      | `SessionSummary`  | Session timing and device identifiers                        |
+| `transformSessionDetail(session)`       | `SessionDetail`   | Session metadata, duration, channels, and notes              |
+| `transformChartChannels(chart)`         | `ChartChannel[]`  | ISO timestamp/value pairs                                    |
+| `transformSessionChart(session, chart)` | `SessionChart`    | Combined session metadata, chart channels, and notes         |
+
+`DeviceWithTemps` contains `uuid: string`, `title: string`, `channels: ChannelReading[]`, and optional `last_drive: DriveStatus`. Each `ChannelReading` has `label: string`, `temp: number`, `unit: string`, and `as_of: string`. Channels missing a current temperature, unit, or reading timestamp are omitted.
+
+```typescript
+import { FireboardClient, transformDeviceWithTemps } from "fireboard-api-client/raw";
+
+const fireboard = new FireboardClient({ token });
+const readings = (await fireboard.getDevices()).map(transformDeviceWithTemps);
+```
+
+`SessionChart` contains `session` (the `id`, `title`, `description`, `start`, `end`, and `in_progress` fields), `channels: ChartChannel[]`, and `notes: Note[]`. All helpers leave inputs unchanged and omit fields outside their output models.
 
 ## Options
 
@@ -237,25 +387,25 @@ Errors omit response bodies and credentials.
 
 ## Other public exports
 
-All public exports are imported from `"fireboard-api-client"`; no internal file paths are needed.
+Both `"fireboard-api-client"` and `"fireboard-api-client/raw"` export the shared options, errors, constants, validators, and transform helpers. Each entry exports its own `FireboardClient` and matching `DeviceListResult` type.
 
 ### TypeScript types
 
-| Type                     | Describes                                                              |
-| ------------------------ | ---------------------------------------------------------------------- |
-| `FireboardClientOptions` | Constructor options, including the required token                      |
-| `RequestOptions`         | Shared transport options: `fetch`, `timeoutMs`, and `userAgent`        |
-| `LoginOptions`           | Login transport options and optional `loginUrl`                        |
-| `DeviceListResult`       | Device-list data and cache freshness metadata                          |
-| `DriveSetpointOptions`   | A setpoint, a control channel, or both for `setDriveSetpoint`          |
-| `FireboardErrorCode`     | The union of error codes listed above                                  |
-| `RawDevice`              | One parsed device and its available metadata/channels                  |
-| `RawDeviceTemperatures`  | JSON returned by the temperature read, without an assumed field schema |
-| `RawAlert`               | An observed channel-alert model                                        |
-| `RawDriveLog`            | An observed Drive-log model                                            |
-| `RawSessionSummary`      | A session-list entry                                                   |
-| `RawSessionDetail`       | Detailed session metadata, devices, and notes                          |
-| `RawChartChannel`        | One channel’s chart series                                             |
+| Type                     | Describes                                                                    |
+| ------------------------ | ---------------------------------------------------------------------------- |
+| `FireboardClientOptions` | Constructor options, including the required token                            |
+| `RequestOptions`         | Shared transport options: `fetch`, `timeoutMs`, and `userAgent`              |
+| `LoginOptions`           | Login transport options and optional `loginUrl`                              |
+| `DeviceListResult`       | Device-list data and cache freshness metadata (data type matches the import) |
+| `DriveSetpointOptions`   | A setpoint, a control channel, or both for `setDriveSetpoint`                |
+| `FireboardErrorCode`     | The union of error codes listed above                                        |
+| `RawDevice`              | One parsed device and its available metadata/channels                        |
+| `RawDeviceTemperatures`  | JSON returned by the temperature read, without an assumed field schema       |
+| `RawAlert`               | An observed channel-alert model                                              |
+| `RawDriveLog`            | An observed Drive-log model                                                  |
+| `RawSessionSummary`      | A session-list entry                                                         |
+| `RawSessionDetail`       | Detailed session metadata, devices, and notes                                |
+| `RawChartChannel`        | One channel’s chart series                                                   |
 
 ### Default constants
 

@@ -1,116 +1,69 @@
-import type { z } from "zod";
-import { DeviceCache, DEFAULT_DEVICE_CACHE_TTL_MS } from "./device-cache.js";
-import { DriveControls } from "./drive.js";
-import { decode, headers, request, DEFAULT_TIMEOUT_MS } from "./request.js";
+import { FireboardClient as RawFireboardClient } from "./raw-client.js";
+import type { FireboardClientOptions, DriveSetpointOptions, DeviceListResult } from "./types.js";
 import {
-  chartResponseSchema,
-  devicesResponseSchema,
-  deviceSchema,
-  deviceTemperaturesResponseSchema,
-  driveLogResponseSchema,
-  sessionDetailSchema,
-  sessionsResponseSchema,
-} from "./schemas.js";
-import type { DeviceListResult, DriveSetpointOptions, FireboardClientOptions } from "./types.js";
-import {
-  encodeDeviceId,
-  validateEndpoint,
-  validateSessionId,
-  validateTiming,
-} from "./validation.js";
+  transformDeviceSummary,
+  transformDriveLog,
+  transformSessionSummary,
+  transformSessionDetail,
+  transformChartChannels,
+  type DeviceSummary,
+} from "./transforms/index.js";
 
-export const DEFAULT_BASE_URL = "https://fireboard.io/api/v1";
+export { DEFAULT_BASE_URL } from "./raw-client.js";
 
+/** Fireboard client returning cleaned device, Drive, session, and chart data. */
 export class FireboardClient {
-  readonly #options: FireboardClientOptions;
-  private readonly baseUrl: string;
-  private readonly drive: DriveControls;
-  private readonly deviceCache: DeviceCache;
+  readonly #raw: RawFireboardClient;
 
   constructor(options: FireboardClientOptions) {
-    if (typeof options?.token !== "string" || !options.token.trim()) {
-      throw new TypeError("Fireboard token is required");
-    }
-
-    validateTiming(options.timeoutMs ?? DEFAULT_TIMEOUT_MS, "timeoutMs");
-    this.deviceCache = new DeviceCache(
-      validateTiming(
-        options.deviceCacheTtlMs ?? DEFAULT_DEVICE_CACHE_TTL_MS,
-        "deviceCacheTtlMs",
-        true,
-      ),
-    );
-    this.baseUrl = validateEndpoint(options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/$/, "");
-    this.#options = { ...options };
-    this.drive = new DriveControls(this.baseUrl, this.#options);
+    this.#raw = new RawFireboardClient(options);
   }
 
-  private async get<S extends z.ZodType>(path: string, schema: S): Promise<z.output<S>> {
-    const response = await request(
-      `${this.baseUrl}${path}`,
-      { headers: headers(this.#options, this.#options.token) },
-      this.#options,
-    );
-
-    return decode(response, schema);
+  getDevices() {
+    return this.#raw.getDevices().then((devices) => devices.map(transformDeviceSummary));
   }
 
-  /** Lists account devices using the per-client device cache. */
-  async getDevices() {
-    return (await this.getDevicesWithCache()).data;
+  getDevicesWithCache(): Promise<DeviceListResult<DeviceSummary>> {
+    return this.#raw.getDevicesWithCache().then((result) => ({
+      ...result,
+      data: result.data.map(transformDeviceSummary),
+    }));
   }
 
-  /** Lists devices with cache freshness metadata. */
-  getDevicesWithCache(): Promise<DeviceListResult> {
-    return this.deviceCache.get(() => this.get("/devices.json", devicesResponseSchema));
-  }
-
-  /** Retrieves one device and its available metadata. */
   getDevice(uuid: string) {
-    return this.get(`/devices/${encodeDeviceId(uuid)}.json`, deviceSchema);
+    return this.#raw.getDevice(uuid).then(transformDeviceSummary);
   }
 
-  /** Retrieves recent temperatures; the official reference does not define their JSON fields. */
+  /** Preserves temperature JSON because its response shape is not documented. */
   getDeviceTemperatures(uuid: string) {
-    return this.get(
-      `/devices/${encodeDeviceId(uuid)}/temps.json`,
-      deviceTemperaturesResponseSchema,
-    );
+    return this.#raw.getDeviceTemperatures(uuid);
   }
 
-  /** Returns a recent Drive log; Fireboard only returns log data less than a minute old. */
   getDriveLog(uuid: string) {
-    return this.get(`/devices/${encodeDeviceId(uuid)}/drivelog.json`, driveLogResponseSchema);
+    return this.#raw.getDriveLog(uuid).then((log) => transformDriveLog(log));
   }
 
-  /** Lists account sessions; the API does not document their ordering. */
   getSessions() {
-    return this.get("/sessions.json", sessionsResponseSchema);
+    return this.#raw.getSessions().then((sessions) => sessions.map(transformSessionSummary));
   }
 
   getSessionDetail(id: number) {
-    return this.get(`/sessions/${validateSessionId(id)}.json`, sessionDetailSchema);
+    return this.#raw.getSessionDetail(id).then(transformSessionDetail);
   }
 
   getSessionChart(id: number, includeDrive = false) {
-    return this.get(
-      `/sessions/${validateSessionId(id)}/chart.json${includeDrive ? "?drive=1" : ""}`,
-      chartResponseSchema,
-    );
+    return this.#raw.getSessionChart(id, includeDrive).then(transformChartChannels);
   }
 
-  /** Sets an auto-mode target in the device's temperature unit and/or its control channel. */
   setDriveSetpoint(uuid: string, options: DriveSetpointOptions): Promise<void> {
-    return this.drive.setSetpoint(uuid, options);
+    return this.#raw.setDriveSetpoint(uuid, options);
   }
 
-  /** Sets a manual fan speed from 0 to 100 percent. */
   setDriveSpeed(uuid: string, percent: number): Promise<void> {
-    return this.drive.setSpeed(uuid, percent);
+    return this.#raw.setDriveSpeed(uuid, percent);
   }
 
-  /** Clears the setpoint and turns the Drive fan off. */
   setDriveOff(uuid: string): Promise<void> {
-    return this.drive.off(uuid);
+    return this.#raw.setDriveOff(uuid);
   }
 }
