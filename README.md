@@ -6,17 +6,8 @@ Requires Node.js 22 or newer. ESM only.
 
 ## Quick start
 
-The package is not yet published to npm. From a checkout of this repository, create an installable package:
-
 ```sh
-npm ci
-npm pack
-```
-
-Then install the generated archive in your application:
-
-```sh
-npm install /path/to/fireboard-api-client-0.1.0.tgz
+npm install fireboard-api-client
 ```
 
 Obtain an API token with `login`:
