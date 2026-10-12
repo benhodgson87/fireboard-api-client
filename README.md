@@ -1,18 +1,25 @@
 # Fireboard API Client
 
-An unofficial TypeScript client for the [Fireboard](https://fireboard.io) temperature monitoring API. Provides typed, validated device, session, chart, and Drive responses using native `fetch`.
+An unofficial TypeScript client for the [Fireboard](https://fireboard.io) API. Read devices, temperatures, and cook sessions, or control a Drive fan with typed methods.
 
-Requires Node.js 22 or newer. ESM only. Not affiliated with Fireboard.
+Requires Node.js 22 or newer. ESM only.
 
-## Installation
+## Quick start
+
+The package is not yet published to npm. From a checkout of this repository, create an installable package:
 
 ```sh
-npm install fireboard-api-client
+npm ci
+npm pack
 ```
 
-Version 0.1.0 is prepared for release, but has not been published. Before release, build and pack this repository with `npm ci && npm pack`, then install the resulting `.tgz` file.
+Then install the generated archive in your application:
 
-## Usage
+```sh
+npm install /path/to/fireboard-api-client-0.1.0.tgz
+```
+
+Obtain an API token with `login`:
 
 ```typescript
 import { FireboardClient, login } from "fireboard-api-client";
@@ -21,21 +28,19 @@ const token = await login({
   username: process.env.FIREBOARD_USERNAME!,
   password: process.env.FIREBOARD_PASSWORD!,
 });
-const fireboard = new FireboardClient({ token });
 
-const { data: devices, fromCache, cacheAgeSeconds } = await fireboard.getDevices();
+const fireboard = new FireboardClient({ token });
+const { data: devices } = await fireboard.getDevices();
 const sessions = await fireboard.getSessions();
-const detail = await fireboard.getSessionDetail(42);
-const chart = await fireboard.getSessionChart(42, true);
 ```
 
-You can also provide an existing Fireboard API token. Fireboard requires a User-Agent header on all API calls, including login; the client supplies one by default. Authentication uses Fireboard's username/password exchange; this library does not implement OAuth or persist credentials.
+If you already have a token, pass it directly to `new FireboardClient({ token })`. Reuse one client per account. The library supplies Fireboard's required User-Agent header and does not store login credentials or implement OAuth.
 
 API reference: [Fireboard Cloud API](https://docs.fireboard.io/app/app-api/).
 
 ## Methods
 
-Create one `FireboardClient` per account/token and reuse it. `login` is a standalone function; the other methods are called on the client.
+All methods below are called on `FireboardClient`, except the standalone `login` function. Read methods return promises of the listed types.
 
 ### Read methods
 
@@ -57,26 +62,17 @@ Create one `FireboardClient` per account/token and reuse it. `login` is a standa
 | `setDriveSpeed(deviceUuid, percent)`    | Manual fan speed, from 0 to 100 percent                 | 1                              |
 | `setDriveOff(deviceUuid)`               | Clears the target and stops the fan                     | 1                              |
 
-Writes return `Promise<void>`, are not cached or automatically retried, and do not refresh the device-list cache. They control real hardware. These commands use an API extension observed in fireboard-mcp, which is not documented on the official API page.
-
-### Authentication
-
-`login(credentials, options?)` exchanges credentials for an API token using one authentication request.
+Writes return `Promise<void>` and are never automatically retried. They do not refresh cached device data. Drive control uses a write API absent from Fireboard’s public reference.
 
 ### `login(credentials, options?)`
 
-Pass `{ username, password }`; `username` can be a Fireboard username or email address. Returns the API token from Fireboard’s `key` response field. Credentials are sent to Fireboard and are not stored by the library.
+Pass `{ username, password }`; `username` can be a Fireboard username or email address. Makes one authentication request and returns the API token.
 
-```typescript
-const token = await login({ username: "your-email", password: "your-password" });
-const fireboard = new FireboardClient({ token });
-```
-
-Options are `loginUrl`, `timeoutMs`, `fetch`, and `userAgent`. This function does not create an OAuth session or persist the returned token.
+Options are `loginUrl`, `timeoutMs`, `fetch`, and `userAgent`. Store the returned token in your application if needed.
 
 ### `getDevices()`
 
-Returns `{ data, fromCache, cacheAgeSeconds }`, where `data` is `RawDevice[]`. The device list is cached for two minutes by default. Concurrent cache misses share one request. `cacheAgeSeconds` reports the rounded age of cached data; a fresh response has age `0` and `fromCache: false`.
+Returns `{ data, fromCache, cacheAgeSeconds }`, where `data` is `RawDevice[]`. `cacheAgeSeconds` is the rounded age of cached data; a fresh response has age `0` and `fromCache: false`. See [Caching and rate limits](#caching-and-rate-limits).
 
 ```typescript
 const { data, fromCache, cacheAgeSeconds } = await fireboard.getDevices();
@@ -86,51 +82,37 @@ Reuse returned UUIDs in later method calls. Temperature and Drive readings neste
 
 ### `getDevice(deviceUuid)`
 
-Returns one device, including its available channel and device metadata. Pass the device’s UUID, not its numeric ID. This always makes a request and neither reads nor updates the device-list cache.
-
-```typescript
-const device = await fireboard.getDevice("your-device-uuid");
-```
+Pass the device’s UUID, not its numeric ID. Returns the device and its available channel metadata without using or updating the device-list cache.
 
 ### `getDeviceTemperatures(deviceUuid)`
 
-Retrieves the latest channel temperatures for one device. Fireboard includes readings only when they are less than one minute old; older channels are omitted. This method is not cached.
+Retrieves the latest channel temperatures for one device. Fireboard includes readings only when they are less than one minute old; older channels are omitted.
 
 ```typescript
 const readings = await fireboard.getDeviceTemperatures("your-device-uuid");
 ```
 
-The official reference does not specify the JSON fields or top-level response shape. `RawDeviceTemperatures` therefore preserves JSON as returned, without inventing a schema for individual readings. Narrow the result before accessing its fields.
+Fireboard does not document this response’s JSON shape. `RawDeviceTemperatures` preserves the returned JSON; narrow the result before accessing its fields.
 
 ### `getDriveLog(deviceUuid)`
 
-Returns a recent Drive log containing the observed `driveper`, `setpoint`, `modetype`, `tiedchannel`, `degreetype`, and `created` fields. Pass the device’s UUID. This method is not cached.
+Returns a recent Drive log containing the observed `driveper`, `setpoint`, `modetype`, `tiedchannel`, `degreetype`, and `created` fields. Pass the device’s UUID.
 
 ```typescript
 const drive = await fireboard.getDriveLog("your-device-uuid");
 ```
 
-Fireboard only returns log data less than one minute old. The documented API does not define the empty/stale-log response shape; the current parser expects the single-object shape observed in fireboard-mcp and rejects other shapes with `INVALID_RESPONSE`.
+Fireboard only returns log data less than one minute old. The client expects a single object; other shapes raise `INVALID_RESPONSE`. Fireboard does not document the empty/stale-log response shape.
 
 ### `getSessions()`
 
-Returns session summaries for the authenticated account. This method is not cached. The official API does not guarantee ordering, so sort or filter results in your application as needed.
+Returns account session summaries. Ordering is not guaranteed; sort or filter results as needed.
 
-```typescript
-const sessions = await fireboard.getSessions();
-```
-
-Use each summary’s numeric `id` for session-detail and chart requests. Observed fields such as `device_ids` are optional.
+Use each summary’s numeric `id` for session-detail and chart requests. `device_ids` is optional.
 
 ### `getSessionDetail(sessionId)`
 
-Returns session metadata, linked devices, and available cook notes. Pass a non-negative integer session ID. This method is not cached. An omitted notes array is normalized to `[]`.
-
-```typescript
-const session = await fireboard.getSessionDetail(42);
-```
-
-Choose this method when you need session context without downloading temperature time-series.
+Pass a non-negative integer session ID. Returns metadata, linked devices, and cook notes; omitted notes become `[]`.
 
 ### `getSessionChart(sessionId, includeDrive = false)`
 
@@ -141,7 +123,7 @@ const temperatures = await fireboard.getSessionChart(42);
 const temperaturesAndDrive = await fireboard.getSessionChart(42, true);
 ```
 
-`includeDrive: true` sends `drive=1`; it does not add another API request. The method is not cached.
+Passing `true` includes Drive data in the same request.
 
 ### `setDriveSetpoint(deviceUuid, options)`
 
@@ -155,11 +137,11 @@ await fireboard.setDriveSetpoint("your-device-uuid", { setpoint: 110, channel: 2
 
 A setpoint switches Drive to automatic control. Its temperature must use the device’s configured unit; the client does not convert Celsius/Fahrenheit. A channel-only call changes the PID control probe without setting a new target.
 
-Supplying both fields sends two separate writes in parallel. If one fails, the other may already have been applied. The method does not retry either write.
+Supplying both fields sends two separate writes in parallel. If one fails, the other may already have been applied.
 
 ### `setDriveSpeed(deviceUuid, percent)`
 
-Pass a finite percentage between `0` and `100`. This puts Drive in manual mode and overrides the active automatic target. The client converts the percentage into Fireboard’s wire-format fraction.
+Pass a finite percentage between `0` and `100`. This puts Drive in manual mode and overrides the active automatic target.
 
 ```typescript
 await fireboard.setDriveSpeed("your-device-uuid", 50);
@@ -177,7 +159,7 @@ await fireboard.setDriveOff("your-device-uuid");
 
 ### Response validation
 
-Responses retain Fireboard’s field names and are validated with Zod. Unknown fields, including nested fields, are preserved. Documented device/session metadata is typed where its format is specified. Nested channel, alert, and note models reflect observed responses rather than a complete contract published by Fireboard.
+Responses retain Fireboard’s field names and unknown fields, including nested fields. Zod validates known fields. Channel, alert, note, and Drive-log models include observed fields that Fireboard’s public reference does not fully specify.
 
 ## Options
 
@@ -189,13 +171,15 @@ Responses retain Fireboard’s field names and are validated with Zod. Unknown f
 - `fetch`: injectable for testing or custom transports.
 - `userAgent`: optional application identification.
 
-Fireboard documents a one-minute freshness cutoff for `latest_temps`, `/temps.json`, and `/drivelog.json`: older readings are not returned. This server-side cutoff is separate from the client’s device cache. The docs do not specify the empty Drive-log response shape.
+`login` accepts `loginUrl`, `timeoutMs`, `fetch`, and `userAgent` separately. URL overrides must use HTTP(S), without credentials, query strings, or fragments. Redirects are rejected to avoid forwarding credentials.
 
-The cache is isolated per client instance. Reuse an instance for the same account; simultaneous device reads share one request. Only the device list is cached, including its nested temperature and Drive readings. Writes do not refresh cached readings.
+## Caching and rate limits
 
-Fireboard limits each user to **17 API calls within any five-minute period**. The client does not automatically retry or schedule requests. Stop sending requests after a rate-limit response: continued requests can extend the block. Access resumes when the rate falls below the threshold, generally after approximately five minutes. Reuse device UUIDs and session IDs, cache device data, and request only the data you need.
+Only `getDevices()` is cached: two minutes by default, including its nested temperature and Drive readings. Each client has its own cache, and concurrent cache misses share one request. Writes do not refresh it. Set `deviceCacheTtlMs: 0` to disable caching.
 
-`login` accepts `loginUrl`, `timeoutMs`, `fetch`, and `userAgent` options separately. Endpoint overrides must use HTTP(S), without credentials, query strings, or fragments. Requests reject redirects to avoid forwarding credentials unexpectedly.
+Fireboard returns temperature and Drive-log readings only when they are less than one minute old. This freshness cutoff applies when fetching; cached device data can be older.
+
+Fireboard limits each user to **17 API calls within any five-minute period**. The client does not schedule or retry requests. After a rate-limit error, pause requests: continued calls can extend the block. Access generally resumes after approximately five minutes, once the request rate falls below the threshold.
 
 ## Errors
 
@@ -224,7 +208,7 @@ try {
 }
 ```
 
-Errors do not include response bodies, usernames, passwords, or API tokens. There is no built-in logging or dependency on environment variables.
+Errors omit response bodies and credentials.
 
 ## Other public exports
 
@@ -247,14 +231,6 @@ All public exports are imported from `"fireboard-api-client"`; no internal file 
 | `RawSessionSummary`      | A session-list entry                                                   |
 | `RawSessionDetail`       | Detailed session metadata, devices, and notes                          |
 | `RawChartChannel`        | One channel’s chart series                                             |
-
-```typescript
-import type { FireboardClientOptions, RawDevice } from "fireboard-api-client";
-
-const options: FireboardClientOptions = { token: "your-api-token" };
-const fireboard = new FireboardClient(options);
-const device: RawDevice = await fireboard.getDevice("your-device-uuid");
-```
 
 ### Default constants
 
@@ -300,4 +276,4 @@ npm pack
 
 The package contains compiled JavaScript and declaration files under `dist/`. `prepack` builds these automatically. Tests and smoke checks use synthetic responses and make no Fireboard account calls.
 
-GitHub CI validates and packs release candidates. The Release Please workflow follows `premium-bonds-client`: configure GitHub App secrets `APP_ID` and `APP_PRIVATE_KEY`, grant that App access to this repository, and configure a protected `npm` environment with `NPM_TOKEN` before enabling releases. No credentials are needed for CI or local tests. Publishing is a separate release action.
+No Fireboard credentials are needed for local tests or CI. Release configuration is maintained in `.github/workflows/`.
