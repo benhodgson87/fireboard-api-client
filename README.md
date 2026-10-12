@@ -22,16 +22,19 @@ const token = await login({
 
 const fireboard = new FireboardClient({ token });
 const devices = await fireboard.getDevices();
-const sessions = await fireboard.getSessions();
+
+for (const device of devices) {
+  console.log(device.uuid, device.title, device.channels);
+}
 ```
 
-If you already have a token, pass it directly to `new FireboardClient({ token })`. Reuse one client per account. The library supplies Fireboard's required User-Agent header and does not store login credentials.
+If you already have a token, pass it directly to `new FireboardClient({ token })`. Reuse one client per account: device lists are cached for two minutes by default. The client supplies Fireboard’s required User-Agent header and does not store login credentials.
 
-API reference: [Fireboard Cloud API](https://docs.fireboard.io/app/app-api/).
+API reference: [Fireboard API](https://docs.fireboard.io/app/app-api/).
 
 ## Methods
 
-All methods below are called on `FireboardClient`, except the standalone `login` function. Read methods return promises of the listed types.
+Read and write methods are called on `FireboardClient`. `login` is a standalone function. Read methods return promises of the listed types.
 
 ### Read methods
 
@@ -64,41 +67,31 @@ Options are `loginUrl`, `timeoutMs`, `fetch`, and `userAgent`. Store the returne
 
 ### `getDevices()`
 
-Returns an array of devices, cached for two minutes by default. Reuse their UUIDs in later method calls.
-
-```typescript
-const devices = await fireboard.getDevices();
-```
+Returns an array of devices, cached for two minutes by default. Pass a device’s `uuid`, not its numeric `id`, to device reads and Drive controls.
 
 ### `getDevicesWithCache()`
 
-Returns `{ data, fromCache, cacheAgeSeconds }`, where `data` is `RawDevice[]`. Shares the cache with `getDevices()`. Fresh responses have `fromCache: false` and age `0`; cached responses report their rounded age in seconds.
+Returns `{ data, fromCache, cacheAgeSeconds }`, where `data` is `RawDevice[]`. Shares the cache with `getDevices()`. Newly fetched responses have `fromCache: false` and age `0`; cached responses report their rounded age in seconds. This age describes the cached response, not the readings within it.
 
 ### `getDevice(deviceUuid)`
 
-Pass the device’s UUID, not its numeric ID. Returns the device and its available channel metadata.
+Returns the device and its available channel metadata without using the device-list cache.
 
 ### `getDeviceTemperatures(deviceUuid)`
 
-Retrieves the latest channel temperatures for one device. Fireboard documents a one-minute freshness cutoff, but live checks returned an older reading after the device powered off. Check each reading’s `created` timestamp before treating it as current.
-
-```typescript
-const readings = await fireboard.getDeviceTemperatures("your-device-uuid");
-```
+Retrieves the latest available channel temperatures. Fireboard documents a one-minute freshness cutoff, but live checks returned older data after power-off. Check reading timestamps before treating values as current.
 
 Fireboard does not document this response’s JSON shape. `RawDeviceTemperatures` preserves the returned JSON; narrow the result before accessing its fields.
 
 ### `getDriveLog(deviceUuid)`
 
-Returns a recent Drive log containing the observed `driveper`, `setpoint`, `modetype`, `tiedchannel`, `degreetype`, and `created` fields. Pass the device’s UUID.
+Returns a recent Drive log with `driveper`, `setpoint`, `modetype`, `tiedchannel`, `degreetype`, and `created` fields, or `{}` when no recent log is available.
+
+Check for an empty object before accessing log fields. Incomplete non-empty logs and other response shapes raise `INVALID_RESPONSE`.
 
 ```typescript
 const drive = await fireboard.getDriveLog("your-device-uuid");
-```
 
-Returns `{}` when no recent Drive log is available, as observed with Drive unplugged or the device powered off. Check for an empty object before accessing log fields. Incomplete non-empty logs and other response shapes raise `INVALID_RESPONSE`.
-
-```typescript
 if (Object.keys(drive).length === 0) {
   console.log("No recent Drive data");
 }
@@ -116,14 +109,12 @@ Pass a non-negative integer session ID. Returns metadata, linked devices, and co
 
 ### `getSessionChart(sessionId, includeDrive = false)`
 
-Returns an array of channel series. Each includes `x` timestamps, `y` temperature values or Drive percentages, `device`, `label`, and `degreetype` (`1` for Celsius, `2` for Fahrenheit). Observed `channel_id` values are optional and numeric identifiers are normalized to strings.
+Returns an array of channel series. Each includes `x` Unix timestamps in seconds, `y` temperature values or Drive percentages, `device`, `label`, and `degreetype`. `channel_id` is optional; numeric identifiers become strings.
 
 ```typescript
 const temperatures = await fireboard.getSessionChart(42);
 const temperaturesAndDrive = await fireboard.getSessionChart(42, true);
 ```
-
-Passing `true` includes Drive data.
 
 ### `setDriveSetpoint(deviceUuid, options)`
 
@@ -147,7 +138,7 @@ Pass a finite percentage between `0` and `100`. This puts Drive in manual mode a
 await fireboard.setDriveSpeed("your-device-uuid", 50);
 ```
 
-A value of `0` stops the fan. Use `setDriveOff` when you want to explicitly clear the setpoint as well.
+A value of `0` stops the fan. Use `setDriveOff()` to clear the setpoint as well.
 
 ### `setDriveOff(deviceUuid)`
 
@@ -159,7 +150,11 @@ await fireboard.setDriveOff("your-device-uuid");
 
 ### Response validation
 
-Responses retain Fireboard’s field names and unknown fields, including nested fields. Zod validates known fields. Channel, alert, note, and Drive-log models include observed fields that Fireboard’s public reference does not fully specify.
+Responses retain Fireboard’s field names and extra fields, including nested fields. Zod validates known fields; extra fields are preserved without individual validation or specific TypeScript types. Missing alerts and notes become empty arrays, and numeric chart `channel_id` values become strings.
+
+Use each reading or chart series’ `degreetype` to interpret temperatures: `1` is Celsius and `2` is Fahrenheit. Device-level unit metadata may differ from the reading’s unit. Channels remain listed when probes are unplugged, but reading fields may be omitted.
+
+The exported TypeScript types describe the client’s validated fields, including observed fields not covered by Fireboard’s public reference.
 
 ## Options
 
@@ -180,8 +175,6 @@ Only `getDevices()` and `getDevicesWithCache()` are cached. Each client has its 
 Other reads and all writes are uncached. Writes do not invalidate cached device data. Nested temperature and Drive readings can remain stale until expiry; use `deviceCacheTtlMs: 0` for fresh device-list reads.
 
 The client does not schedule requests or retry failures. Consuming applications remain responsible for rate-limit mitigation.
-
-Fireboard documents a one-minute freshness cutoff. Live checks confirmed that device-channel readings disappear after expiry, but `/temps.json` can still return older data after power-off. Inspect reading timestamps. Drive logs without recent data return `{}`.
 
 Fireboard limits each user to **17 API calls within any five-minute period**. After a rate-limit error, pause requests: continued calls can extend the block. Access generally resumes after approximately five minutes, once the request rate falls below the threshold.
 
