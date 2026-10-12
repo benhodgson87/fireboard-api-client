@@ -4,12 +4,12 @@ import { device, jsonResponse, createClient } from "./helpers.js";
 afterEach(() => vi.restoreAllMocks());
 
 describe("device reads", () => {
-  it("sends separate requests for concurrent and repeated device-list reads", async () => {
+  it("sends separate concurrent and repeated reads when caching is disabled", async () => {
     const pending: Array<(response: Response) => void> = [];
     const fetcher = vi
       .fn<typeof fetch>()
       .mockImplementation(() => new Promise<Response>((resolve) => pending.push(resolve)));
-    const api = createClient(fetcher);
+    const api = createClient(fetcher, { deviceCacheTtlMs: 0 });
 
     const first = api.getDevices();
     const concurrent = api.getDevices();

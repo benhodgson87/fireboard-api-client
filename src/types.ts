@@ -1,3 +1,5 @@
+import type { RawDevice } from "./schemas.js";
+
 export interface RequestOptions {
   fetch?: typeof globalThis.fetch;
   timeoutMs?: number;
@@ -7,6 +9,7 @@ export interface RequestOptions {
 export interface FireboardClientOptions extends RequestOptions {
   token: string;
   baseUrl?: string;
+  deviceCacheTtlMs?: number;
 }
 
 export interface LoginOptions extends RequestOptions {
@@ -16,3 +19,9 @@ export interface LoginOptions extends RequestOptions {
 export type DriveSetpointOptions =
   | { setpoint: number; channel?: number }
   | { setpoint?: number; channel: number };
+
+export interface DeviceListResult {
+  data: RawDevice[];
+  fromCache: boolean;
+  cacheAgeSeconds: number;
+}

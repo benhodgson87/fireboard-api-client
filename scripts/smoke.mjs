@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
-import { FireboardClient } from "../dist/index.js";
+import { FireboardClient, transformDriveLog, DEFAULT_DEVICE_CACHE_TTL_MS } from "../dist/index.js";
 
 const { version } = createRequire(import.meta.url)("../package.json");
 
@@ -17,4 +17,16 @@ const client = new FireboardClient({
 });
 assert.deepEqual(await client.getSessions(), []);
 assert.equal(calls, 1);
+assert.equal(DEFAULT_DEVICE_CACHE_TTL_MS, 120_000);
+assert.equal(
+  transformDriveLog({
+    setpoint: 110,
+    driveper: 25,
+    modetype: 2,
+    tiedchannel: 1,
+    degreetype: 1,
+    created: "2026-01-01T00:00:00Z",
+  }).unit,
+  "C",
+);
 console.log("Built package smoke check passed without Fireboard calls.");

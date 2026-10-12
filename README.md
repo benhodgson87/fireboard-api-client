@@ -38,6 +38,7 @@ All methods below are called on `FireboardClient`, except the standalone `login`
 | Method                                      | What it does                                                                    | Returns                 |
 | ------------------------------------------- | ------------------------------------------------------------------------------- | ----------------------- |
 | `getDevices()`                              | Lists the account’s devices with channels, temperatures, and available metadata | `RawDevice[]`           |
+| `getDevicesWithCache()`                     | Lists devices with cache freshness metadata                                     | `DeviceListResult`      |
 | `getDevice(deviceUuid)`                     | Retrieves detailed information for one device                                   | `RawDevice`             |
 | `getDeviceTemperatures(deviceUuid)`         | Retrieves readings less than one minute old                                     | `RawDeviceTemperatures` |
 | `getDriveLog(deviceUuid)`                   | Retrieves a Drive log less than one minute old                                  | `RawDriveLog`           |
@@ -63,11 +64,15 @@ Options are `loginUrl`, `timeoutMs`, `fetch`, and `userAgent`. Store the returne
 
 ### `getDevices()`
 
-Returns an array of devices. Reuse their UUIDs in later method calls.
+Returns an array of devices, cached for two minutes by default. Reuse their UUIDs in later method calls.
 
 ```typescript
 const devices = await fireboard.getDevices();
 ```
+
+### `getDevicesWithCache()`
+
+Returns `{ data, fromCache, cacheAgeSeconds }`, where `data` is `RawDevice[]`. Shares the same cache as `getDevices()`. Fresh responses have `fromCache: false` and age `0`; cached responses report their rounded age in seconds.
 
 ### `getDevice(deviceUuid)`
 
@@ -150,22 +155,54 @@ await fireboard.setDriveOff("your-device-uuid");
 
 Responses retain Fireboard’s field names and unknown fields, including nested fields. Zod validates known fields. Channel, alert, note, and Drive-log models include observed fields that Fireboard’s public reference does not fully specify.
 
+## Output transforms
+
+Read methods return validated Fireboard data. Use these helpers to select useful fields and produce simpler output:
+
+```typescript
+import { transformDeviceWithTemps, transformSessionDetail } from "fireboard-api-client";
+
+const readings = (await fireboard.getDevices()).map(transformDeviceWithTemps);
+const session = transformSessionDetail(await fireboard.getSessionDetail(42));
+```
+
+| Helper                                  | Returns           | Cleanup                                                                                                |
+| --------------------------------------- | ----------------- | ------------------------------------------------------------------------------------------------------ |
+| `transformDeviceSummary(device)`        | `DeviceSummary`   | Device metadata, channel labels, alerts, battery, and last Drive status                                |
+| `transformDeviceWithTemps(device)`      | `DeviceWithTemps` | Probe readings with `temp`, `unit`, and `as_of`; omits channels without readings, units, or timestamps |
+| `transformDriveLog(log, channels?)`     | `DriveStatus`     | Fan percentage, setpoint, mode, unit, timestamp, and optional control-channel label                    |
+| `transformSessionSummary(session)`      | `SessionSummary`  | Start/end times, `in_progress`, and device UUIDs                                                       |
+| `transformSessionDetail(session)`       | `SessionDetail`   | Duration in minutes, devices, flattened channels, and notes                                            |
+| `transformChartChannels(chart)`         | `ChartChannel[]`  | Paired readings with ISO timestamps instead of separate `x`/`y` arrays                                 |
+| `transformSessionChart(session, chart)` | `SessionChart`    | Session metadata, transformed chart channels, and notes                                                |
+
+Transforms leave their inputs unchanged and omit fields outside their output models. Degree codes `1` and `2` become `C` and `F`; other codes remain strings. Values are not converted between units. Chart readings use `temp` for both temperatures and Drive percentages, matching the source series. Mismatched chart timestamp/value arrays throw `TypeError`.
+
+Completed session durations use the end time; active sessions use the current time. If a session summary omits `device_ids`, `device_uuids` is empty. Missing device channel counts remain omitted.
+
+All return types above are exported, along with `Alert`, `DeviceChannel`, `ChannelReading`, and `Note`.
+
 ## Options
 
-`new FireboardClient({ token, baseUrl?, timeoutMs?, fetch?, userAgent? })`
+`new FireboardClient({ token, baseUrl?, deviceCacheTtlMs?, timeoutMs?, fetch?, userAgent? })`
 
 - `baseUrl`: defaults to `https://fireboard.io/api/v1`.
+- `deviceCacheTtlMs`: device-list cache TTL; defaults to 120,000 ms. Set `0` to disable caching and shared in-flight reads.
 - `timeoutMs`: defaults to 15,000 ms and covers fetching the response body.
 - `fetch`: injectable for testing or custom transports.
 - `userAgent`: optional application identification; defaults to `fireboard-api-client/<version>`.
 
 `login` accepts `loginUrl`, `timeoutMs`, `fetch`, and `userAgent` separately. URL overrides must use HTTP(S), without credentials, query strings, or fragments. Redirects are rejected to avoid forwarding credentials.
 
-## Rate limits
+## Caching and rate limits
 
-The client does not cache responses, schedule requests, or retry failures. Consuming applications are responsible for caching and rate-limit mitigation.
+Only `getDevices()` and `getDevicesWithCache()` are cached. Reuse one client per account: its cache is isolated from other clients, and simultaneous cache misses share a request. The TTL starts when a valid response arrives; errors are never cached. Returned device data is copied so caller mutations do not affect later reads.
 
-Fireboard returns temperature and Drive-log readings only when they are less than one minute old.
+Other reads and all writes are uncached. Writes do not invalidate the device cache, so its nested temperature and Drive readings may remain stale until expiry. Set `deviceCacheTtlMs: 0` for fresh device reads.
+
+The client does not schedule requests or retry failures. Consuming applications remain responsible for rate-limit mitigation.
+
+Fireboard returns temperature and Drive-log readings only when they are less than one minute old. Cached device readings can be older.
 
 Fireboard limits each user to **17 API calls within any five-minute period**. After a rate-limit error, pause requests: continued calls can extend the block. Access generally resumes after approximately five minutes, once the request rate falls below the threshold.
 
@@ -209,6 +246,7 @@ All public exports are imported from `"fireboard-api-client"`; no internal file 
 | `FireboardClientOptions` | Constructor options, including the required token                      |
 | `RequestOptions`         | Shared transport options: `fetch`, `timeoutMs`, and `userAgent`        |
 | `LoginOptions`           | Login transport options and optional `loginUrl`                        |
+| `DeviceListResult`       | Device-list data and cache freshness metadata                          |
 | `DriveSetpointOptions`   | A setpoint, a control channel, or both for `setDriveSetpoint`          |
 | `FireboardErrorCode`     | The union of error codes listed above                                  |
 | `RawDevice`              | One parsed device and its available metadata/channels                  |
@@ -221,11 +259,12 @@ All public exports are imported from `"fireboard-api-client"`; no internal file 
 
 ### Default constants
 
-| Constant             | Value                                       |
-| -------------------- | ------------------------------------------- |
-| `DEFAULT_BASE_URL`   | `https://fireboard.io/api/v1`               |
-| `DEFAULT_LOGIN_URL`  | `https://fireboard.io/api/rest-auth/login/` |
-| `DEFAULT_TIMEOUT_MS` | `15_000`                                    |
+| Constant                      | Value                                       |
+| ----------------------------- | ------------------------------------------- |
+| `DEFAULT_BASE_URL`            | `https://fireboard.io/api/v1`               |
+| `DEFAULT_LOGIN_URL`           | `https://fireboard.io/api/rest-auth/login/` |
+| `DEFAULT_DEVICE_CACHE_TTL_MS` | `120_000`                                   |
+| `DEFAULT_TIMEOUT_MS`          | `15_000`                                    |
 
 ### Zod validators
 

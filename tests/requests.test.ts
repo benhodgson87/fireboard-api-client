@@ -143,6 +143,8 @@ describe("requests and validation", () => {
     { token: "x", baseUrl: "https://user:password@example.test" },
     { token: "x", baseUrl: "file:///tmp/data" },
     { token: "x", timeoutMs: 0 },
+    { token: "x", deviceCacheTtlMs: -1 },
+    { token: "x", deviceCacheTtlMs: Infinity },
   ])("rejects invalid client options %j", (options) => {
     expect(() => new FireboardClient(options)).toThrow();
   });
