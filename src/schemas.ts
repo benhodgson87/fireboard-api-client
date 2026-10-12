@@ -101,13 +101,13 @@ export const deviceSchema = z.looseObject({
   channels: z.array(deviceChannelSchema),
   last_drivelog: driveLogSchema.nullable().optional(),
   active: z.boolean().optional(),
-  last_battery_reading: z.number().optional(),
+  last_battery_reading: z.number().nullable().optional(),
   model_name: z.string().optional(),
   created: z.string().optional(),
   hardware_id: z.string().optional(),
   latest_temps: z.array(z.unknown()).optional(),
-  device_log: z.record(z.string(), z.unknown()).optional(),
-  last_templog: z.string().optional(),
+  device_log: z.record(z.string(), z.unknown()).nullable().optional(),
+  last_templog: z.string().nullable().optional(),
 });
 
 // GET /api/v1/devices.json
