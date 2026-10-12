@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import { DeviceCache, DEFAULT_DEVICE_CACHE_TTL_MS } from "./device-cache.js";
 import { DriveControls } from "./drive.js";
 import { decode, headers, request, DEFAULT_TIMEOUT_MS } from "./request.js";
 import {
@@ -10,7 +11,7 @@ import {
   sessionDetailSchema,
   sessionsResponseSchema,
 } from "./schemas.js";
-import type { DriveSetpointOptions, FireboardClientOptions } from "./types.js";
+import type { DeviceListResult, DriveSetpointOptions, FireboardClientOptions } from "./types.js";
 import {
   encodeDeviceId,
   validateEndpoint,
@@ -24,6 +25,7 @@ export class FireboardClient {
   readonly #options: FireboardClientOptions;
   private readonly baseUrl: string;
   private readonly drive: DriveControls;
+  private readonly deviceCache: DeviceCache;
 
   constructor(options: FireboardClientOptions) {
     if (typeof options?.token !== "string" || !options.token.trim()) {
@@ -31,6 +33,13 @@ export class FireboardClient {
     }
 
     validateTiming(options.timeoutMs ?? DEFAULT_TIMEOUT_MS, "timeoutMs");
+    this.deviceCache = new DeviceCache(
+      validateTiming(
+        options.deviceCacheTtlMs ?? DEFAULT_DEVICE_CACHE_TTL_MS,
+        "deviceCacheTtlMs",
+        true,
+      ),
+    );
     this.baseUrl = validateEndpoint(options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/$/, "");
     this.#options = { ...options };
     this.drive = new DriveControls(this.baseUrl, this.#options);
@@ -46,9 +55,14 @@ export class FireboardClient {
     return decode(response, schema);
   }
 
-  /** Lists account devices; every call sends a separate request. */
-  getDevices() {
-    return this.get("/devices.json", devicesResponseSchema);
+  /** Lists account devices using the per-client device cache. */
+  async getDevices() {
+    return (await this.getDevicesWithCache()).data;
+  }
+
+  /** Lists devices with cache freshness metadata. */
+  getDevicesWithCache(): Promise<DeviceListResult> {
+    return this.deviceCache.get(() => this.get("/devices.json", devicesResponseSchema));
   }
 
   /** Retrieves one device and its available metadata. */
