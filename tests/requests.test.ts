@@ -1,3 +1,4 @@
+import { createRequire } from "node:module";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FireboardClient, FireboardError, login } from "../src/index.js";
 import { device, jsonResponse, createClient } from "./helpers.js";
@@ -5,6 +6,26 @@ import { device, jsonResponse, createClient } from "./helpers.js";
 afterEach(() => vi.restoreAllMocks());
 
 describe("requests and validation", () => {
+  it("includes the package version in the default User-Agent for reads, writes, and login", async () => {
+    const { version } = createRequire(import.meta.url)("../package.json") as { version: string };
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse([]))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(jsonResponse({ key: "synthetic-login-token" }));
+    const api = createClient(fetcher);
+
+    await api.getDevices();
+    await api.setDriveOff("abc-123");
+    await login({ username: "test-user", password: "test-password" }, { fetch: fetcher });
+
+    expect(fetcher).toHaveBeenCalledTimes(3);
+
+    for (const [, init] of fetcher.mock.calls) {
+      expect(init?.headers).toMatchObject({ "User-Agent": `fireboard-api-client/${version}` });
+    }
+  });
+
   it("authenticates credentials at the separate login endpoint", async () => {
     const fetcher = vi
       .fn<typeof fetch>()
