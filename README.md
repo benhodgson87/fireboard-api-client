@@ -25,7 +25,7 @@ const devices = await fireboard.getDevices();
 const sessions = await fireboard.getSessions();
 ```
 
-If you already have a token, pass it directly to `new FireboardClient({ token })`. Reuse one client per account. The library supplies Fireboard's required User-Agent header and does not store login credentials or implement OAuth.
+If you already have a token, pass it directly to `new FireboardClient({ token })`. Reuse one client per account. The library supplies Fireboard's required User-Agent header and does not store login credentials.
 
 API reference: [Fireboard Cloud API](https://docs.fireboard.io/app/app-api/).
 
@@ -35,29 +35,29 @@ All methods below are called on `FireboardClient`, except the standalone `login`
 
 ### Read methods
 
-| Method                                      | What it does                                                                    | Returns                 | API calls |
-| ------------------------------------------- | ------------------------------------------------------------------------------- | ----------------------- | --------- |
-| `getDevices()`                              | Lists the account’s devices with channels, temperatures, and available metadata | `RawDevice[]`           | 1         |
-| `getDevice(deviceUuid)`                     | Retrieves detailed information for one device                                   | `RawDevice`             | 1         |
-| `getDeviceTemperatures(deviceUuid)`         | Retrieves readings less than one minute old                                     | `RawDeviceTemperatures` | 1         |
-| `getDriveLog(deviceUuid)`                   | Retrieves a Drive log less than one minute old                                  | `RawDriveLog`           | 1         |
-| `getSessions()`                             | Lists current and historical account sessions                                   | `RawSessionSummary[]`   | 1         |
-| `getSessionDetail(sessionId)`               | Retrieves a session’s metadata, devices, and available notes                    | `RawSessionDetail`      | 1         |
-| `getSessionChart(sessionId, includeDrive?)` | Retrieves temperature time-series, optionally including Drive data              | `RawChartChannel[]`     | 1         |
+| Method                                      | What it does                                                                    | Returns                 |
+| ------------------------------------------- | ------------------------------------------------------------------------------- | ----------------------- |
+| `getDevices()`                              | Lists the account’s devices with channels, temperatures, and available metadata | `RawDevice[]`           |
+| `getDevice(deviceUuid)`                     | Retrieves detailed information for one device                                   | `RawDevice`             |
+| `getDeviceTemperatures(deviceUuid)`         | Retrieves readings less than one minute old                                     | `RawDeviceTemperatures` |
+| `getDriveLog(deviceUuid)`                   | Retrieves a Drive log less than one minute old                                  | `RawDriveLog`           |
+| `getSessions()`                             | Lists current and historical account sessions                                   | `RawSessionSummary[]`   |
+| `getSessionDetail(sessionId)`               | Retrieves a session’s metadata, devices, and available notes                    | `RawSessionDetail`      |
+| `getSessionChart(sessionId, includeDrive?)` | Retrieves temperature time-series, optionally including Drive data              | `RawChartChannel[]`     |
 
 ### Write methods
 
-| Method                                  | What it changes                                         | API calls                      |
-| --------------------------------------- | ------------------------------------------------------- | ------------------------------ |
-| `setDriveSetpoint(deviceUuid, options)` | Auto-mode temperature target and/or PID control channel | 1 for either field; 2 for both |
-| `setDriveSpeed(deviceUuid, percent)`    | Manual fan speed, from 0 to 100 percent                 | 1                              |
-| `setDriveOff(deviceUuid)`               | Clears the target and stops the fan                     | 1                              |
+| Method                                  | What it changes                                         |
+| --------------------------------------- | ------------------------------------------------------- |
+| `setDriveSetpoint(deviceUuid, options)` | Auto-mode temperature target and/or PID control channel |
+| `setDriveSpeed(deviceUuid, percent)`    | Manual fan speed, from 0 to 100 percent                 |
+| `setDriveOff(deviceUuid)`               | Clears the target and stops the fan                     |
 
 Writes return `Promise<void>` and are never automatically retried. Drive control uses a write API absent from Fireboard’s public reference.
 
 ### `login(credentials, options?)`
 
-Pass `{ username, password }`; `username` can be a Fireboard username or email address. Makes one authentication request and returns the API token.
+Pass `{ username, password }`; `username` can be a Fireboard username or email address. Returns the API token.
 
 Options are `loginUrl`, `timeoutMs`, `fetch`, and `userAgent`. Store the returned token in your application if needed.
 
@@ -71,7 +71,7 @@ const devices = await fireboard.getDevices();
 
 ### `getDevice(deviceUuid)`
 
-Pass the device’s UUID, not its numeric ID. Returns the device and its available channel metadata in a separate request.
+Pass the device’s UUID, not its numeric ID. Returns the device and its available channel metadata.
 
 ### `getDeviceTemperatures(deviceUuid)`
 
@@ -112,7 +112,7 @@ const temperatures = await fireboard.getSessionChart(42);
 const temperaturesAndDrive = await fireboard.getSessionChart(42, true);
 ```
 
-Passing `true` includes Drive data in the same request.
+Passing `true` includes Drive data.
 
 ### `setDriveSetpoint(deviceUuid, options)`
 
@@ -126,7 +126,7 @@ await fireboard.setDriveSetpoint("your-device-uuid", { setpoint: 110, channel: 2
 
 A setpoint switches Drive to automatic control. Its temperature must use the device’s configured unit; the client does not convert Celsius/Fahrenheit. A channel-only call changes the PID control probe without setting a new target.
 
-Supplying both fields sends two separate writes in parallel. If one fails, the other may already have been applied.
+Changes to the target and control channel are not atomic. If the method fails, one change may already have been applied.
 
 ### `setDriveSpeed(deviceUuid, percent)`
 
@@ -163,7 +163,7 @@ Responses retain Fireboard’s field names and unknown fields, including nested 
 
 ## Rate limits
 
-Every method call sends its own request, including concurrent reads. The client does not cache responses, schedule requests, or retry failures. Consuming applications are responsible for caching and rate-limit mitigation.
+The client does not cache responses, schedule requests, or retry failures. Consuming applications are responsible for caching and rate-limit mitigation.
 
 Fireboard returns temperature and Drive-log readings only when they are less than one minute old.
 
