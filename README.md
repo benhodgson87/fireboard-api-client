@@ -29,7 +29,9 @@ const detail = await fireboard.getSessionDetail(42);
 const chart = await fireboard.getSessionChart(42, true);
 ```
 
-You can also provide an existing Fireboard API token. Authentication uses Fireboard's username/password exchange; this library does not implement OAuth or persist credentials.
+You can also provide an existing Fireboard API token. Fireboard requires a User-Agent header on all API calls, including login; the client supplies one by default. Authentication uses Fireboard's username/password exchange; this library does not implement OAuth or persist credentials.
+
+API reference: [Fireboard Cloud API](https://docs.fireboard.io/app/app-api/). This package implements the endpoints listed below; the official API also documents individual-device and device-temperature endpoints, which are not implemented yet.
 
 ## Methods
 
@@ -43,9 +45,9 @@ You can also provide an existing Fireboard API token. Authentication uses Firebo
 | `controlDrive(deviceUuid, payload)`         | `void`                                                  | 1                               |
 | `login(credentials, options?)`              | API token                                               | Separate authentication request |
 
-Responses retain Fireboard's field names and are validated with Zod. Exported `RawDevice`, `RawAlert`, `RawDriveLog`, `RawSessionSummary`, `RawSessionDetail`, and `RawChartChannel` types describe the parsed responses. Unknown fields are stripped.
+Responses retain Fireboard's field names and are validated with Zod. Exported `RawDevice`, `RawAlert`, `RawDriveLog`, `RawSessionSummary`, `RawSessionDetail`, and `RawChartChannel` types describe the parsed responses. Unknown fields are preserved so additional API properties are not discarded. Documented device and session properties are typed where their format is specified. Nested channel/alert/note fields and the optional `channel_id` and `device_ids` fields reflect observed responses; they are not a complete contract published by Fireboard.
 
-Drive control writes to real hardware. The payload uses Fireboard's raw wire format, for example `{ t: "fan", p: "0.5" }` for 50% fan speed or `{ t: "fan", setpoint: "110" }` for a target in the device's configured temperature unit. The envelope and `request_type: "control"` are supplied by the client.
+Drive control’s `/mq.json` endpoint and payload are **not documented in the official API page**; they are based on the existing fireboard-mcp implementation and may change independently. Drive control writes to real hardware. The payload uses Fireboard's raw wire format, for example `{ t: "fan", p: "0.5" }` for 50% fan speed or `{ t: "fan", setpoint: "110" }` for a target in the device's configured temperature unit. The envelope and `request_type: "control"` are supplied by the client.
 
 ## Options
 
@@ -57,9 +59,11 @@ Drive control writes to real hardware. The payload uses Fireboard's raw wire for
 - `fetch`: injectable for testing or custom transports.
 - `userAgent`: optional application identification.
 
+Fireboard documents a one-minute freshness cutoff for `latest_temps`, `/temps.json`, and `/drivelog.json`: older readings are not returned. This server-side cutoff is separate from the client’s device cache. The docs do not specify the empty Drive-log response shape.
+
 The cache is isolated per client instance. Reuse an instance for the same account; simultaneous device reads share one request. Only the device list is cached, including its nested temperature and Drive readings. Writes do not refresh cached readings.
 
-Fireboard limits REST usage to **17 calls per five-minute window**. The client does not automatically retry or schedule requests. Exceeding the limit can block requests for approximately five minutes. Reuse device UUIDs and session IDs, cache device data, and request only the data you need.
+Fireboard limits each user to **17 API calls within any five-minute period**. The client does not automatically retry or schedule requests. Stop sending requests after a rate-limit response: continued requests can extend the block. Access resumes when the rate falls below the threshold, generally after approximately five minutes. Reuse device UUIDs and session IDs, cache device data, and request only the data you need.
 
 `login` accepts `loginUrl`, `timeoutMs`, `fetch`, and `userAgent` options separately. Endpoint overrides must use HTTP(S), without credentials, query strings, or fragments. Requests reject redirects to avoid forwarding credentials unexpectedly.
 

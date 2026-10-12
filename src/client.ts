@@ -82,10 +82,12 @@ export class FireboardClient {
     return { data, fromCache: false, cacheAgeSeconds: 0 };
   }
 
+  /** Returns a recent Drive log; Fireboard only returns log data less than a minute old. */
   getDriveLog(uuid: string) {
     return this.get(`/devices/${encodeDeviceId(uuid)}/drivelog.json`, driveLogResponseSchema);
   }
 
+  /** Lists account sessions; the API does not document their ordering. */
   getSessions() {
     return this.get("/sessions.json", sessionsResponseSchema);
   }
@@ -101,6 +103,7 @@ export class FireboardClient {
     );
   }
 
+  /** Uses the undocumented control endpoint observed in fireboard-mcp. Writes to hardware. */
   async controlDrive(uuid: string, payload: DriveControlPayload): Promise<void> {
     await request(
       `${this.baseUrl}/devices/${encodeDeviceId(uuid)}/mq.json`,

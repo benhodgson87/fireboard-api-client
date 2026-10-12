@@ -1,14 +1,15 @@
 import { z } from "zod";
 
 // Unused channel slots on a device may omit degreetype or send null.
-// Drive logs and chart channels always include it — use z.number() directly there.
+// Nested field shapes are based on responses observed while building fireboard-mcp.
+// The official API page does not specify their complete structure.
 const nullableDegreeTypeSchema = z.number().nullable().optional();
 
 // Represents a single drive controller log entry.
 // Used both as a top-level response from GET /api/v1/devices/{uuid}/drivelog.json
 // and nested inside device objects from GET /api/v1/devices.json.
 //
-// Example (GET /api/v1/devices/{uuid}/drivelog.json):
+// Illustrative excerpt (GET /api/v1/devices/{uuid}/drivelog.json):
 // {
 //   "tiedchannel": 1,
 //   "setpoint": 107.0,
@@ -17,7 +18,7 @@ const nullableDegreeTypeSchema = z.number().nullable().optional();
 //   "degreetype": 1,
 //   "created": "2024-01-01T12:00:00+00:00"
 // }
-const driveLogSchema = z.object({
+const driveLogSchema = z.looseObject({
   driveper: z.number(),
   setpoint: z.number(),
   modetype: z.union([z.string(), z.number()]), // string from /drivelog.json ("Off"), integer from /devices.json last_drivelog (2) — API inconsistency
@@ -28,7 +29,7 @@ const driveLogSchema = z.object({
 
 // Represents a temperature alert configured on a channel.
 // Nested inside channel objects from GET /api/v1/devices.json.
-const alertSchema = z.object({
+const alertSchema = z.looseObject({
   id: z.number(),
   temp_min: z.number(),
   temp_max: z.number(),
@@ -49,7 +50,7 @@ const alertSchema = z.object({
 // Represents a single temperature probe channel on a device.
 // Nested inside device objects from GET /api/v1/devices.json.
 //
-// Example channel entry:
+// Illustrative channel excerpt (not a complete schema fixture):
 // {
 //   "channel": 1,
 //   "channel_label": "Grill Temp",
@@ -62,7 +63,7 @@ const alertSchema = z.object({
 //     "degreetype": 1
 //   }
 // }
-const deviceChannelSchema = z.object({
+const deviceChannelSchema = z.looseObject({
   id: z.number(),
   channel: z.number(),
   channel_label: z.string(),
@@ -83,7 +84,7 @@ const deviceChannelSchema = z.object({
 // Represents a single Fireboard device.
 // Used as an element in GET /api/v1/devices.json.
 //
-// Example (GET /api/v1/devices.json, first element):
+// Illustrative excerpt (GET /api/v1/devices.json, first element):
 // {
 //   "uuid": "abc12345-0000-0000-0000-000000000000",
 //   "title": "Big Green Egg",
@@ -92,22 +93,27 @@ const deviceChannelSchema = z.object({
 //   "channels": [ ... ],          // see deviceChannelSchema
 //   "last_drivelog": { ... }       // see driveLogSchema, null if no drive session
 // }
-export const deviceSchema = z.object({
+export const deviceSchema = z.looseObject({
   uuid: z.string(),
   id: z.number(),
   title: z.string(),
-  channel_count: z.number(),
+  channel_count: z.number().optional(),
   channels: z.array(deviceChannelSchema),
   last_drivelog: driveLogSchema.nullable().optional(),
-  active: z.boolean(),
+  active: z.boolean().optional(),
   last_battery_reading: z.number().optional(),
   model_name: z.string().optional(),
+  created: z.string().optional(),
+  hardware_id: z.string().optional(),
+  latest_temps: z.array(z.unknown()).optional(),
+  device_log: z.record(z.string(), z.unknown()).optional(),
+  last_templog: z.string().optional(),
 });
 
 // GET /api/v1/devices.json
 // Returns all devices associated with the authenticated account.
 //
-// Example response (truncated):
+// Illustrative response excerpt (truncated):
 // [
 //   {
 //     "uuid": "abc12345-0000-0000-0000-000000000000",
@@ -126,13 +132,16 @@ export const deviceSchema = z.object({
 // ]
 export const devicesResponseSchema = z.array(deviceSchema);
 
-// The live Drive log endpoint returns a single object.
+// GET /api/v1/devices/{uuid}/drivelog.json
+// Official docs: returns the latest Drive log if it is less than one minute old.
+// A single-object response and the fields above are based on observed responses;
+// the official page does not define the body when no recent Drive log exists.
 export const driveLogResponseSchema = driveLogSchema;
 
 // Represents a session summary as returned in the sessions list.
 // Used as an element in GET /api/v1/sessions.json.
 //
-// Example session summary entry:
+// Illustrative session summary excerpt:
 // {
 //   "id": 12345678,
 //   "title": "Sat Jan 1 Session",
@@ -141,19 +150,24 @@ export const driveLogResponseSchema = driveLogSchema;
 //   "end_time": null,
 //   "device_ids": ["abc12345-0000-0000-0000-000000000000"]
 // }
-const sessionSummarySchema = z.object({
+const sessionSummarySchema = z.looseObject({
   id: z.number(),
   title: z.string(),
   description: z.string(),
   start_time: z.string(),
   end_time: z.string().nullable(),
-  device_ids: z.array(z.string()),
+  // Observed list-response field; not listed in the official session properties.
+  device_ids: z.array(z.string()).optional(),
+  devices: z.array(z.unknown()).optional(),
+  duration: z.string().optional(),
+  created: z.string().optional(),
+  owner: z.record(z.string(), z.unknown()).optional(),
 });
 
 // GET /api/v1/sessions.json
-// Returns all cooking sessions for the authenticated account, most recent first.
+// Returns sessions for the authenticated account. The official docs do not specify ordering.
 //
-// Example response (two entries shown):
+// Illustrative response excerpt (two entries shown):
 // [
 //   { "id": 12345678, "title": "Sat Jan 1 Session", "description": "Auto-created session",
 //     "start_time": "2024-01-01T10:00:00Z", "end_time": null,
@@ -168,14 +182,14 @@ export const sessionsResponseSchema = z.array(sessionSummarySchema);
 // Represents a single cook note attached to a session.
 // Nested inside the notes array of a session detail response.
 //
-// Example:
+// Illustrative note excerpt:
 // {
 //   "note_time": "2024-01-01T12:00:00Z",
 //   "note_text": "Added more fuel",
 //   "channel": 2,       // null if not tied to a specific channel
 //   "device": "abc12345-0000-0000-0000-000000000000"
 // }
-const noteSchema = z.object({
+const noteSchema = z.looseObject({
   note_time: z.string(),
   note_text: z.string(),
   channel: z.number().nullable(),
@@ -184,7 +198,7 @@ const noteSchema = z.object({
 
 // Represents a device summary nested inside a session detail response.
 // Contains only the fields needed to identify the device and its channels.
-const sessionDeviceSchema = z.object({
+const sessionDeviceSchema = z.looseObject({
   uuid: z.string(),
   title: z.string(),
   channels: z.array(
@@ -198,7 +212,7 @@ const sessionDeviceSchema = z.object({
 // GET /api/v1/sessions/{id}.json
 // Returns full detail for a single cooking session including devices and notes.
 //
-// Example (GET /api/v1/sessions/12345678.json):
+// Illustrative excerpt (GET /api/v1/sessions/12345678.json):
 // {
 //   "id": 12345678,
 //   "title": "Sat Jan 1 Session",
@@ -221,7 +235,7 @@ const sessionDeviceSchema = z.object({
 //       "channel": 2, "device": "abc12345-0000-0000-0000-000000000000" }
 //   ]
 // }
-export const sessionDetailSchema = z.object({
+export const sessionDetailSchema = z.looseObject({
   id: z.number(),
   title: z.string(),
   description: z.string(),
@@ -229,6 +243,9 @@ export const sessionDetailSchema = z.object({
   end_time: z.string().nullable(),
   devices: z.array(sessionDeviceSchema),
   notes: z.array(noteSchema).default([]),
+  duration: z.string().optional(),
+  created: z.string().optional(),
+  owner: z.record(z.string(), z.unknown()).optional(),
 });
 
 // Represents a single channel's time-series temperature data within a session.
@@ -237,7 +254,7 @@ export const sessionDetailSchema = z.object({
 // x: array of Unix timestamps (seconds since epoch)
 // y: array of temperature readings corresponding to each timestamp
 //
-// Example element:
+// Illustrative channel excerpt:
 // {
 //   "device": "abc12345-0000-0000-0000-000000000000",
 //   "label": "Grill Temp",
@@ -246,20 +263,21 @@ export const sessionDetailSchema = z.object({
 //   "x": [1704110400, 1704110460, ...],
 //   "y": [225.0, 226.1, ...]
 // }
-export const chartChannelSchema = z.object({
+export const chartChannelSchema = z.looseObject({
   device: z.string(),
   label: z.string(),
   degreetype: z.number(),
-  channel_id: z.coerce.string(),
+  channel_id: z.union([z.string(), z.number()]).transform(String).optional(),
   x: z.array(z.number()),
   y: z.array(z.number()),
 });
 
 // GET /api/v1/sessions/{id}/chart.json
 // Returns time-series temperature data for all channels in a session.
-// Each entry covers one channel; x and y arrays are parallel (same length).
+// Each entry represents a channel on a device. The docs describe x as Unix timestamps
+// and y as temperature values or Drive %. They do not specify channel_id.
 //
-// Example response (two channels, values truncated):
+// Illustrative response excerpt (two channels, values truncated):
 // [
 //   { "device": "abc12345-0000-0000-0000-000000000000", "label": "Grill Temp",
 //     "degreetype": 1, "channel_id": "1", "x": [1704110400, 1704110460], "y": [225.0, 226.1] },
