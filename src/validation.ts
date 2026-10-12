@@ -14,8 +14,8 @@ export function validateEndpoint(value: string): string {
   return url.href;
 }
 
-export function validateTiming(value: number, name: string, allowZero = false): number {
-  if (!Number.isFinite(value) || value < (allowZero ? 0 : 1) || value > 2_147_483_647) {
+export function validateTiming(value: number, name: string): number {
+  if (!Number.isFinite(value) || value < 1 || value > 2_147_483_647) {
     throw new TypeError(`Invalid ${name}`);
   }
 

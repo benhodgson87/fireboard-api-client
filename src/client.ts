@@ -10,7 +10,7 @@ import {
   sessionDetailSchema,
   sessionsResponseSchema,
 } from "./schemas.js";
-import type { DeviceListResult, DriveSetpointOptions, FireboardClientOptions } from "./types.js";
+import type { DriveSetpointOptions, FireboardClientOptions } from "./types.js";
 import {
   encodeDeviceId,
   validateEndpoint,
@@ -19,15 +19,11 @@ import {
 } from "./validation.js";
 
 export const DEFAULT_BASE_URL = "https://fireboard.io/api/v1";
-export const DEFAULT_DEVICE_CACHE_TTL_MS = 120_000;
 
 export class FireboardClient {
   readonly #options: FireboardClientOptions;
   private readonly baseUrl: string;
-  private readonly cacheTtlMs: number;
   private readonly drive: DriveControls;
-  private cache: { data: DeviceListResult["data"]; fetchedAt: number } | undefined;
-  private pendingDevices: Promise<DeviceListResult> | undefined;
 
   constructor(options: FireboardClientOptions) {
     if (typeof options?.token !== "string" || !options.token.trim()) {
@@ -35,11 +31,6 @@ export class FireboardClient {
     }
 
     validateTiming(options.timeoutMs ?? DEFAULT_TIMEOUT_MS, "timeoutMs");
-    this.cacheTtlMs = validateTiming(
-      options.deviceCacheTtlMs ?? DEFAULT_DEVICE_CACHE_TTL_MS,
-      "deviceCacheTtlMs",
-      true,
-    );
     this.baseUrl = validateEndpoint(options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/$/, "");
     this.#options = { ...options };
     this.drive = new DriveControls(this.baseUrl, this.#options);
@@ -55,39 +46,12 @@ export class FireboardClient {
     return decode(response, schema);
   }
 
-  async getDevices(): Promise<DeviceListResult> {
-    const now = Date.now();
-
-    if (this.cache && now - this.cache.fetchedAt < this.cacheTtlMs) {
-      return {
-        data: this.cache.data,
-        fromCache: true,
-        cacheAgeSeconds: Math.round((now - this.cache.fetchedAt) / 1000),
-      };
-    }
-
-    if (this.pendingDevices) {
-      return this.pendingDevices;
-    }
-
-    this.pendingDevices = this.fetchDevices();
-
-    try {
-      return await this.pendingDevices;
-    } finally {
-      this.pendingDevices = undefined;
-    }
+  /** Lists account devices; every call sends a separate request. */
+  getDevices() {
+    return this.get("/devices.json", devicesResponseSchema);
   }
 
-  private async fetchDevices(): Promise<DeviceListResult> {
-    const data = await this.get("/devices.json", devicesResponseSchema);
-
-    this.cache = { data, fetchedAt: Date.now() };
-
-    return { data, fromCache: false, cacheAgeSeconds: 0 };
-  }
-
-  /** Retrieves one device directly, without using or updating the device-list cache. */
+  /** Retrieves one device and its available metadata. */
   getDevice(uuid: string) {
     return this.get(`/devices/${encodeDeviceId(uuid)}.json`, deviceSchema);
   }

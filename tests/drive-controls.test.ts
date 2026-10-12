@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { DriveSetpointOptions } from "../src/index.js";
-import { createClient, device, jsonResponse } from "./helpers.js";
+import { createClient, jsonResponse } from "./helpers.js";
 
 function controlFetch() {
   return vi.fn<typeof fetch>().mockImplementation(async () => new Response(null, { status: 204 }));
@@ -94,18 +94,12 @@ describe("Drive controls", () => {
     },
   );
 
-  it("does not retry failed writes or invalidate the device-list cache", async () => {
-    const fetcher = vi
-      .fn<typeof fetch>()
-      .mockResolvedValueOnce(jsonResponse([device]))
-      .mockResolvedValueOnce(jsonResponse({}, 500));
+  it("does not retry failed writes", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(jsonResponse({}, 500));
     const api = createClient(fetcher);
-
-    await api.getDevices();
 
     await expect(api.setDriveOff("abc-123")).rejects.toMatchObject({ code: "API_UNAVAILABLE" });
 
-    expect((await api.getDevices()).fromCache).toBe(true);
-    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fetcher).toHaveBeenCalledTimes(1);
   });
 });

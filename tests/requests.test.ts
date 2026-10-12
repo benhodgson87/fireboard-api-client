@@ -86,7 +86,7 @@ describe("requests and validation", () => {
       .mockResolvedValueOnce(jsonResponse([device]))
       .mockResolvedValueOnce(jsonResponse({ unexpected: true }));
 
-    expect((await createClient(fetcher).getDevices()).data[0]?.channels[0]?.degreetype).toBeNull();
+    expect((await createClient(fetcher).getDevices())[0]?.channels[0]?.degreetype).toBeNull();
 
     await expect(createClient(fetcher).getSessions()).rejects.toMatchObject({
       code: "INVALID_RESPONSE",
@@ -121,7 +121,6 @@ describe("requests and validation", () => {
     { token: "" },
     { token: "x", baseUrl: "https://user:password@example.test" },
     { token: "x", baseUrl: "file:///tmp/data" },
-    { token: "x", deviceCacheTtlMs: -1 },
     { token: "x", timeoutMs: 0 },
   ])("rejects invalid client options %j", (options) => {
     expect(() => new FireboardClient(options)).toThrow();
