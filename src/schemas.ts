@@ -140,8 +140,9 @@ export const deviceTemperaturesResponseSchema = z.json();
 // GET /api/v1/devices/{uuid}/drivelog.json
 // Official docs: returns the latest Drive log if it is less than one minute old.
 // A single-object response and the fields above are based on observed responses;
-// the official page does not define the body when no recent Drive log exists.
-export const driveLogResponseSchema = driveLogSchema;
+// Observed with Drive disconnected or the device offline: HTTP 200 with {}.
+// Keep an empty response unchanged, and reject incomplete non-empty logs.
+export const driveLogResponseSchema = z.union([driveLogSchema, z.strictObject({})]);
 
 // Represents a session summary as returned in the sessions list.
 // Used as an element in GET /api/v1/sessions.json.
@@ -297,5 +298,6 @@ export type RawSessionSummary = z.infer<typeof sessionSummarySchema>;
 export type RawSessionDetail = z.infer<typeof sessionDetailSchema>;
 export type RawChartChannel = z.infer<typeof chartChannelSchema>;
 export type RawDriveLog = z.infer<typeof driveLogSchema>;
+export type RawDriveLogResponse = z.infer<typeof driveLogResponseSchema>;
 
 export type RawDeviceTemperatures = z.infer<typeof deviceTemperaturesResponseSchema>;
