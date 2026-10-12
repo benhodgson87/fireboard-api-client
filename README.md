@@ -40,8 +40,8 @@ All methods below are called on `FireboardClient`, except the standalone `login`
 | `getDevices()`                              | Lists the account’s devices with channels, temperatures, and available metadata | `RawDevice[]`           |
 | `getDevicesWithCache()`                     | Lists devices with cache freshness metadata                                     | `DeviceListResult`      |
 | `getDevice(deviceUuid)`                     | Retrieves detailed information for one device                                   | `RawDevice`             |
-| `getDeviceTemperatures(deviceUuid)`         | Retrieves readings less than one minute old                                     | `RawDeviceTemperatures` |
-| `getDriveLog(deviceUuid)`                   | Retrieves a Drive log less than one minute old                                  | `RawDriveLog`           |
+| `getDeviceTemperatures(deviceUuid)`         | Retrieves the latest available readings                                         | `RawDeviceTemperatures` |
+| `getDriveLog(deviceUuid)`                   | Retrieves a recent Drive log or an empty object                                 | `RawDriveLogResponse`   |
 | `getSessions()`                             | Lists current and historical account sessions                                   | `RawSessionSummary[]`   |
 | `getSessionDetail(sessionId)`               | Retrieves a session’s metadata, devices, and available notes                    | `RawSessionDetail`      |
 | `getSessionChart(sessionId, includeDrive?)` | Retrieves temperature time-series, optionally including Drive data              | `RawChartChannel[]`     |
@@ -80,7 +80,7 @@ Pass the device’s UUID, not its numeric ID. Returns the device and its availab
 
 ### `getDeviceTemperatures(deviceUuid)`
 
-Retrieves the latest channel temperatures for one device. Fireboard includes readings only when they are less than one minute old; older channels are omitted.
+Retrieves the latest channel temperatures for one device. Fireboard documents a one-minute freshness cutoff, but live checks returned an older reading after the device powered off. Check each reading’s `created` timestamp before treating it as current.
 
 ```typescript
 const readings = await fireboard.getDeviceTemperatures("your-device-uuid");
@@ -96,7 +96,13 @@ Returns a recent Drive log containing the observed `driveper`, `setpoint`, `mode
 const drive = await fireboard.getDriveLog("your-device-uuid");
 ```
 
-Fireboard only returns log data less than one minute old. The client expects a single object; other shapes raise `INVALID_RESPONSE`. Fireboard does not document the empty/stale-log response shape.
+Returns `{}` when no recent Drive log is available, as observed with Drive unplugged or the device powered off. Check for an empty object before accessing log fields. Incomplete non-empty logs and other response shapes raise `INVALID_RESPONSE`.
+
+```typescript
+if (Object.keys(drive).length === 0) {
+  console.log("No recent Drive data");
+}
+```
 
 ### `getSessions()`
 
@@ -175,7 +181,7 @@ Other reads and all writes are uncached. Writes do not invalidate cached device 
 
 The client does not schedule requests or retry failures. Consuming applications remain responsible for rate-limit mitigation.
 
-Fireboard returns temperature and Drive-log readings only when they are less than one minute old.
+Fireboard documents a one-minute freshness cutoff. Live checks confirmed that device-channel readings disappear after expiry, but `/temps.json` can still return older data after power-off. Inspect reading timestamps. Drive logs without recent data return `{}`.
 
 Fireboard limits each user to **17 API calls within any five-minute period**. After a rate-limit error, pause requests: continued calls can extend the block. Access generally resumes after approximately five minutes, once the request rate falls below the threshold.
 
@@ -225,6 +231,7 @@ All public exports are imported from `"fireboard-api-client"`; no internal file 
 | `RawDevice`              | One parsed device and its available metadata/channels                  |
 | `RawDeviceTemperatures`  | JSON returned by the temperature read, without an assumed field schema |
 | `RawAlert`               | An observed channel-alert model                                        |
+| `RawDriveLogResponse`    | A populated `RawDriveLog` or an empty object                           |
 | `RawDriveLog`            | An observed Drive-log model                                            |
 | `RawSessionSummary`      | A session-list entry                                                   |
 | `RawSessionDetail`       | Detailed session metadata, devices, and notes                          |
@@ -248,7 +255,7 @@ The client already validates responses. These exports are also available if you 
 | `deviceSchema`                     | One device                                              |
 | `devicesResponseSchema`            | An array of devices                                     |
 | `deviceTemperaturesResponseSchema` | JSON temperature data without an assumed response shape |
-| `driveLogResponseSchema`           | The observed single-object Drive log                    |
+| `driveLogResponseSchema`           | A populated Drive log or an empty object                |
 | `sessionsResponseSchema`           | An array of session summaries                           |
 | `sessionDetailSchema`              | One detailed session                                    |
 | `chartChannelSchema`               | One chart channel                                       |
