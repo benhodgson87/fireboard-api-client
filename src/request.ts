@@ -1,9 +1,13 @@
+import { createRequire } from "node:module";
 import type { z } from "zod";
 import { FireboardError } from "./errors.js";
 import type { RequestOptions } from "./types.js";
 import { validateTiming } from "./validation.js";
 
 export const DEFAULT_TIMEOUT_MS = 15_000;
+
+const { version } = createRequire(import.meta.url)("../package.json") as { version: string };
+const defaultUserAgent = `fireboard-api-client/${version}`;
 
 export async function request(
   url: string,
@@ -83,6 +87,6 @@ export async function decode<S extends z.ZodType>(
 export function headers(options: RequestOptions, token?: string): Record<string, string> {
   return {
     ...(token ? { Authorization: `Token ${token}` } : {}),
-    "User-Agent": options.userAgent ?? "fireboard-api-client",
+    "User-Agent": options.userAgent ?? defaultUserAgent,
   };
 }

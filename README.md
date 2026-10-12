@@ -157,7 +157,7 @@ Responses retain Fireboard’s field names and unknown fields, including nested 
 - `baseUrl`: defaults to `https://fireboard.io/api/v1`.
 - `timeoutMs`: defaults to 15,000 ms and covers fetching the response body.
 - `fetch`: injectable for testing or custom transports.
-- `userAgent`: optional application identification.
+- `userAgent`: optional application identification; defaults to `fireboard-api-client/<version>`.
 
 `login` accepts `loginUrl`, `timeoutMs`, `fetch`, and `userAgent` separately. URL overrides must use HTTP(S), without credentials, query strings, or fragments. Redirects are rejected to avoid forwarding credentials.
 
