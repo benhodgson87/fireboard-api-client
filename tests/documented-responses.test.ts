@@ -64,6 +64,7 @@ describe("documented response properties", () => {
     };
 
     expect(sessionsResponseSchema.parse([session])).toEqual([session]);
+
     expect(sessionDetailSchema.parse(session)).toEqual({ ...session, notes: [] });
   });
 
@@ -79,6 +80,7 @@ describe("documented response properties", () => {
     const result = chartResponseSchema.parse([channel]);
 
     expect(result).toEqual([channel]);
+
     expect(result[0]).not.toHaveProperty("channel_id");
   });
 
