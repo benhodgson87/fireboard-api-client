@@ -3,6 +3,8 @@ import { decode, headers, request, DEFAULT_TIMEOUT_MS } from "./request.js";
 import {
   chartResponseSchema,
   devicesResponseSchema,
+  deviceSchema,
+  deviceTemperaturesResponseSchema,
   driveLogResponseSchema,
   sessionDetailSchema,
   sessionsResponseSchema,
@@ -80,6 +82,19 @@ export class FireboardClient {
     this.cache = { data, fetchedAt: Date.now() };
 
     return { data, fromCache: false, cacheAgeSeconds: 0 };
+  }
+
+  /** Retrieves one device directly, without using or updating the device-list cache. */
+  getDevice(uuid: string) {
+    return this.get(`/devices/${encodeDeviceId(uuid)}.json`, deviceSchema);
+  }
+
+  /** Retrieves recent temperatures; the official reference does not define their JSON fields. */
+  getDeviceTemperatures(uuid: string) {
+    return this.get(
+      `/devices/${encodeDeviceId(uuid)}/temps.json`,
+      deviceTemperaturesResponseSchema,
+    );
   }
 
   /** Returns a recent Drive log; Fireboard only returns log data less than a minute old. */

@@ -132,6 +132,11 @@ export const deviceSchema = z.looseObject({
 // ]
 export const devicesResponseSchema = z.array(deviceSchema);
 
+// GET /api/v1/devices/{uuid}/temps.json
+// Official docs specify the one-minute freshness cutoff, but not the response structure.
+// Preserve JSON without inventing required field names or a top-level container shape.
+export const deviceTemperaturesResponseSchema = z.json();
+
 // GET /api/v1/devices/{uuid}/drivelog.json
 // Official docs: returns the latest Drive log if it is less than one minute old.
 // A single-object response and the fields above are based on observed responses;
@@ -292,3 +297,5 @@ export type RawSessionSummary = z.infer<typeof sessionSummarySchema>;
 export type RawSessionDetail = z.infer<typeof sessionDetailSchema>;
 export type RawChartChannel = z.infer<typeof chartChannelSchema>;
 export type RawDriveLog = z.infer<typeof driveLogSchema>;
+
+export type RawDeviceTemperatures = z.infer<typeof deviceTemperaturesResponseSchema>;
