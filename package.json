@@ -1,0 +1,57 @@
+{
+  "name": "fireboard-api-client",
+  "version": "0.1.0",
+  "description": "TypeScript client for the unofficial Fireboard temperature monitoring API",
+  "keywords": [
+    "api-client",
+    "bbq",
+    "fireboard",
+    "temperature",
+    "typescript"
+  ],
+  "homepage": "https://github.com/benhodgson87/fireboard-api-client#readme",
+  "bugs": {
+    "url": "https://github.com/benhodgson87/fireboard-api-client/issues"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/benhodgson87/fireboard-api-client.git"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "node scripts/clean.mjs && tsc",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.tests.json",
+    "test": "vitest run",
+    "smoke": "npm run build && node scripts/smoke.mjs",
+    "lint": "oxlint --deny-warnings src tests scripts",
+    "lint:fix": "oxlint --fix --deny-warnings src tests scripts",
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check .",
+    "prepack": "npm run build"
+  },
+  "dependencies": {
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "oxfmt": "^0.72.0",
+    "oxlint": "^1.87.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
