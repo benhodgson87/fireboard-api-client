@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      publish_tag:
+        description: Existing release tag to publish; leave blank to run Release Please
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -14,6 +19,7 @@ concurrency:
 
 jobs:
   release-please:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.publish_tag == '' }}
     runs-on: ubuntu-latest
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
@@ -44,14 +50,14 @@ jobs:
   publish:
     name: Publish npm package
     needs: release-please
-    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    if: ${{ always() && !cancelled() && (needs.release-please.outputs.release_created == 'true' || (github.event_name == 'workflow_dispatch' && inputs.publish_tag != '')) }}
     runs-on: ubuntu-latest
     environment: npm
     steps:
       - name: Checkout released version
         uses: actions/checkout@v4
         with:
-          ref: ${{ needs.release-please.outputs.tag_name }}
+          ref: ${{ inputs.publish_tag || needs.release-please.outputs.tag_name }}
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
@@ -61,7 +67,7 @@ jobs:
       - run: npm ci
       - name: Verify release version
         env:
-          RELEASE_TAG: ${{ needs.release-please.outputs.tag_name }}
+          RELEASE_TAG: ${{ inputs.publish_tag || needs.release-please.outputs.tag_name }}
         run: |
           node --input-type=module -e '
             import fs from "node:fs";
