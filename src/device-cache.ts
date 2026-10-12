@@ -1,15 +1,15 @@
-import type { RawDevice } from "./schemas.js";
+import type { Device } from "./schemas.js";
 import type { DeviceListResult } from "./types.js";
 
 export const DEFAULT_DEVICE_CACHE_TTL_MS = 120_000;
 
 export class DeviceCache {
-  private cached: { data: RawDevice[]; fetchedAt: number } | undefined;
+  private cached: { data: Device[]; fetchedAt: number } | undefined;
   private pending: Promise<DeviceListResult> | undefined;
 
   constructor(private readonly ttlMs: number) {}
 
-  async get(load: () => Promise<RawDevice[]>): Promise<DeviceListResult> {
+  async get(load: () => Promise<Device[]>): Promise<DeviceListResult> {
     if (this.ttlMs === 0) {
       return { data: await load(), fromCache: false, cacheAgeSeconds: 0 };
     }
@@ -41,7 +41,7 @@ export class DeviceCache {
     }
   }
 
-  private async fetch(load: () => Promise<RawDevice[]>): Promise<DeviceListResult> {
+  private async fetch(load: () => Promise<Device[]>): Promise<DeviceListResult> {
     const data = await load();
 
     this.cached = { data, fetchedAt: Date.now() };

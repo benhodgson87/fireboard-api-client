@@ -38,16 +38,16 @@ Read and write methods are called on `FireboardClient`. `login` is a standalone 
 
 ### Read methods
 
-| Method                                      | What it does                                                                    | Returns                 |
-| ------------------------------------------- | ------------------------------------------------------------------------------- | ----------------------- |
-| `getDevices()`                              | Lists the account’s devices with channels, temperatures, and available metadata | `RawDevice[]`           |
-| `getDevicesWithCache()`                     | Lists devices with cache freshness metadata                                     | `DeviceListResult`      |
-| `getDevice(deviceUuid)`                     | Retrieves detailed information for one device                                   | `RawDevice`             |
-| `getDeviceTemperatures(deviceUuid)`         | Retrieves the latest available readings                                         | `RawDeviceTemperatures` |
-| `getDriveLog(deviceUuid)`                   | Retrieves a recent Drive log or an empty object                                 | `RawDriveLogResponse`   |
-| `getSessions()`                             | Lists current and historical account sessions                                   | `RawSessionSummary[]`   |
-| `getSessionDetail(sessionId)`               | Retrieves a session’s metadata, devices, and available notes                    | `RawSessionDetail`      |
-| `getSessionChart(sessionId, includeDrive?)` | Retrieves temperature time-series, optionally including Drive data              | `RawChartChannel[]`     |
+| Method                                      | What it does                                                                    | Returns              |
+| ------------------------------------------- | ------------------------------------------------------------------------------- | -------------------- |
+| `getDevices()`                              | Lists the account’s devices with channels, temperatures, and available metadata | `Device[]`           |
+| `getDevicesWithCache()`                     | Lists devices with cache freshness metadata                                     | `DeviceListResult`   |
+| `getDevice(deviceUuid)`                     | Retrieves detailed information for one device                                   | `Device`             |
+| `getDeviceTemperatures(deviceUuid)`         | Retrieves the latest available readings                                         | `DeviceTemperatures` |
+| `getDriveLog(deviceUuid)`                   | Retrieves a recent Drive log or an empty object                                 | `DriveLogResponse`   |
+| `getSessions()`                             | Lists current and historical account sessions                                   | `SessionSummary[]`   |
+| `getSessionDetail(sessionId)`               | Retrieves a session’s metadata, devices, and available notes                    | `SessionDetail`      |
+| `getSessionChart(sessionId, includeDrive?)` | Retrieves temperature time-series, optionally including Drive data              | `ChartChannel[]`     |
 
 ### Write methods
 
@@ -71,7 +71,7 @@ Returns an array of devices, cached for two minutes by default. Pass a device’
 
 ### `getDevicesWithCache()`
 
-Returns `{ data, fromCache, cacheAgeSeconds }`, where `data` is `RawDevice[]`. Shares the cache with `getDevices()`. Newly fetched responses have `fromCache: false` and age `0`; cached responses report their rounded age in seconds. This age describes the cached response, not the readings within it.
+Returns `{ data, fromCache, cacheAgeSeconds }`, where `data` is `Device[]`. Shares the cache with `getDevices()`. Newly fetched responses have `fromCache: false` and age `0`; cached responses report their rounded age in seconds. This age describes the cached response, not the readings within it.
 
 ### `getDevice(deviceUuid)`
 
@@ -81,7 +81,7 @@ Returns the device and its available channel metadata without using the device-l
 
 Retrieves the latest available channel temperatures. Fireboard documents a one-minute freshness cutoff, but live checks returned older data after power-off. Check reading timestamps before treating values as current.
 
-Fireboard does not document this response’s JSON shape. `RawDeviceTemperatures` preserves the returned JSON; narrow the result before accessing its fields.
+Fireboard does not document this response’s JSON shape. `DeviceTemperatures` preserves the returned JSON; narrow the result before accessing its fields.
 
 ### `getDriveLog(deviceUuid)`
 
@@ -221,14 +221,14 @@ All public exports are imported from `"fireboard-api-client"`; no internal file 
 | `DeviceListResult`       | Device-list data and cache freshness metadata                          |
 | `DriveSetpointOptions`   | A setpoint, a control channel, or both for `setDriveSetpoint`          |
 | `FireboardErrorCode`     | The union of error codes listed above                                  |
-| `RawDevice`              | One parsed device and its available metadata/channels                  |
-| `RawDeviceTemperatures`  | JSON returned by the temperature read, without an assumed field schema |
-| `RawAlert`               | An observed channel-alert model                                        |
-| `RawDriveLogResponse`    | A populated `RawDriveLog` or an empty object                           |
-| `RawDriveLog`            | An observed Drive-log model                                            |
-| `RawSessionSummary`      | A session-list entry                                                   |
-| `RawSessionDetail`       | Detailed session metadata, devices, and notes                          |
-| `RawChartChannel`        | One channel’s chart series                                             |
+| `Device`                 | One parsed device and its available metadata/channels                  |
+| `DeviceTemperatures`     | JSON returned by the temperature read, without an assumed field schema |
+| `Alert`                  | An observed channel-alert model                                        |
+| `DriveLogResponse`       | A populated `DriveLog` or an empty object                              |
+| `DriveLog`               | An observed Drive-log model                                            |
+| `SessionSummary`         | A session-list entry                                                   |
+| `SessionDetail`          | Detailed session metadata, devices, and notes                          |
+| `ChartChannel`           | One channel’s chart series                                             |
 
 ### Default constants
 
